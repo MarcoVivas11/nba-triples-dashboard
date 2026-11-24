@@ -1,0 +1,36 @@
+name: Actualizar Live NBA Triples
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Corre cada 15 min entre 23:00 UTC y 06:59 UTC (7:00 PM a 2:59 AM hora local)
+    - cron: '*/15 23,0,1,2,3,4,5,6 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Consultar partidos en vivo
+        run: python nba_live_ahora.py
+
+      - name: Guardar nba_live.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add nba_live.json
+          git commit -m "Sync live NBA" || exit 0
+          git push
