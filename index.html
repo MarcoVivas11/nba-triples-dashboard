@@ -1,0 +1,292 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>NBA 2026-27 - Jornada y Probabilidades Triples</title>
+<style>
+body{margin:0;font-family:'Segoe UI',system-ui,sans-serif;background:#0f172a;color:#f8fafc;padding:22px}
+.wrap{max-width:1420px;margin:0 auto}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid #334155;margin-bottom:16px}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.bc{background:rgba(34,197,94,.16);border:1px solid #22c55e;color:#4ade80;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.bg{background:rgba(56,189,248,.14);border:1px solid #38bdf8;color:#7dd3fc;padding:4px 10px;border-radius:999px;font-size:12px}
+.bh{background:rgba(250,204,21,.15);border:1px solid #eab308;color:#fde047;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.blive-info{background:rgba(220,38,38,.18);border:1px solid #ef4444;color:#fca5a5;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.live-badge{display:inline-block;background:#dc2626;color:#ffffff;font-size:10px;font-weight:800;letter-spacing:.5px;padding:2px 7px;border-radius:5px;margin-left:6px;vertical-align:middle;box-shadow:0 0 8px rgba(220,38,38,.65)}
+.live-stat{display:inline-block;background:rgba(220,38,38,.2);border:1px solid #f87171;color:#fecaca;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;margin-left:6px}
+button{background:#38bdf8;color:#061322;border:none;padding:8px 13px;border-radius:8px;font-weight:600;cursor:pointer}
+button.sec{background:#1e293b;color:#f8fafc;border:1px solid #334155}
+.slate-box{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:12px 14px;margin-bottom:16px}
+.slate-title{font-size:12px;font-weight:700;color:#fde047;text-transform:uppercase;margin-bottom:8px}
+.match-list{display:flex;flex-wrap:wrap;gap:7px}
+.match-pill{background:#0b1120;border:1px solid #334155;padding:4px 9px;border-radius:7px;font-size:12px;color:#e2e8f0}
+.match-live{border-color:#ef4444;background:rgba(220,38,38,.12);color:#fecaca;font-weight:700}
+.recs{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px;margin-bottom:16px}
+.rec-card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px}
+.rec-head{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.rec-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 9px;background:#0b1120;border-radius:8px;margin-bottom:6px;font-size:12px;cursor:pointer;border:1px solid transparent}
+.rec-item:hover{border-color:#38bdf8}
+.prob-tag{font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(34,197,94,.18);color:#4ade80;white-space:nowrap}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:13px}
+.kv{font-size:24px;font-weight:700;color:#38bdf8;margin-top:4px}
+.ctrl{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;background:#1e293b;padding:12px;border-radius:12px;border:1px solid #334155;margin-bottom:16px}
+input,select{width:100%;padding:8px 10px;border-radius:8px;border:1px solid #334155;background:#0b1120;color:#f8fafc}
+.tbl{background:#1e293b;border:1px solid #334155;border-radius:12px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#0b1120;color:#94a3b8;text-align:left;padding:10px 10px;border-bottom:1px solid #334155;white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid rgba(51,65,85,.55);vertical-align:middle}
+tr:hover td{background:rgba(56,189,248,.07);cursor:pointer}
+.pcell{display:flex;align-items:center;gap:10px}
+.ava{width:44px;height:34px;object-fit:cover;object-position:top;border-radius:8px;background:#0b1120}
+.tpill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:7px;font-weight:700;font-size:12px;color:#fff}
+.dot{width:8px;height:8px;border-radius:50%}
+.mpill{display:inline-block;padding:3px 8px;border-radius:999px;font-weight:700;font-size:12px;color:#fff}
+.today-dot{display:inline-block;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:700;background:rgba(250,204,21,.2);color:#fde047;margin-left:6px}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:11px;padding:2px 6px;border-radius:5px;background:#0b1120;border:1px solid #334155}
+.bgm{display:none;position:fixed;inset:0;background:rgba(2,6,23,.8);align-items:center;justify-content:center;padding:20px;z-index:50}
+.mod{background:#1e293b;border:1px solid #334155;border-radius:14px;max-width:680px;width:100%;overflow:hidden}
+.mban{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;color:#fff}
+.mfoto{width:78px;height:58px;object-fit:cover;object-position:top;border-radius:10px;border:2px solid rgba(255,255,255,.35)}
+.mbody{padding:16px 20px}
+.live-box-modal{background:#0b1120;border:1px solid #ef4444;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#fecaca}
+.brow{display:grid;grid-template-columns:76px 1fr 56px;align-items:center;gap:10px;margin:7px 0;font-size:12px}
+.btrk{height:14px;background:#0b1120;border-radius:6px;overflow:hidden}
+.bfil{height:100%;border-radius:6px}
+@media (max-width:900px){.ctrl{grid-template-columns:1fr}}
+@media print{body{background:#fff;color:#000;padding:0}.ctrl,.np,.slate-box,.recs{display:none}.kpi,.tbl{background:#fff;border:1px solid #ccc}td,th,.chip,.kv,.bc,.bg,.bh,.blive-info{color:#000;background:#f8fafc}}
+</style></head><body><div class="wrap">
+<header><div><h1 style="margin:0;font-size:21px">NBA 2026-27 - Jornada del Dia y Probabilidad de Triples (1T / 2T / 3T)</h1>
+<div style="color:#94a3b8;font-size:13px;margin-top:4px">Base: >= 80% PJ del equipo y >= 5.0 3PA/J · Presiona F5 para leer lo ultimo en nba_live.json</div>
+<div class="badges">
+  <span class="bc">Fecha de corte oficial NBA: 23/11/2026</span>
+  <span class="bh">Jornada del dia: 24/11/2026</span>
+  <span class="bg">Generado: 24/11/2026 07:25 PM</span>
+  <span class="blive-info" id="liveBadgeHeader">Live: esperando nba_live.json</span>
+</div></div>
+<div class="np" style="display:flex;gap:8px"><button class="sec" onclick="resetF()">Limpiar filtros</button><button onclick="window.print()">Imprimir / PDF</button></div></header>
+
+<section class="slate-box" id="slateBox"></section>
+<section class="recs" id="recsBox"></section>
+<section class="kpis" id="kpis"></section>
+
+<section class="ctrl">
+  <input id="q" placeholder="Buscar jugador o equipo..." oninput="render()">
+  <select id="soloHoy" onchange="render()">
+    <option value="hoy">Jornada de hoy (recomendado)</option>
+    <option value="todos">Todos los jugadores elegibles</option>
+  </select>
+  <select id="eq" onchange="render()"><option value="">Todos los equipos</option></select>
+  <select id="ord" onchange="render()">
+    <option value="p2">Mayor Prob. 2+ triples</option>
+    <option value="p1">Mayor Prob. 1+ triple</option>
+    <option value="p3">Mayor Prob. 3+ triples</option>
+    <option value="tpa">Mayor volumen (3PA/J)</option>
+    <option value="abc">Equipo A-Z</option>
+  </select>
+</section>
+
+<section class="tbl"><table><thead><tr>
+  <th>Equipo</th><th>Jugador</th><th>PJ</th><th>3PA/J</th><th>3PM/J</th>
+  <th>Prob. 1T+</th><th>Prob. 2T+</th><th>Prob. 3T+</th><th>Max</th><th>Frecuencia</th>
+</tr></thead><tbody id="tb"></tbody></table></section></div>
+
+<div class="bgm" id="bgM" onclick="if(event.target.id==='bgM')this.style.display='none'"><div class="mod" id="modBox"><div class="mban" id="mBan"><div style="display:flex;align-items:center;gap:12px"><img id="mFoto" class="mfoto" onerror="this.style.visibility='hidden'"><div><h2 id="mTit" style="margin:0;font-size:18px"></h2><div id="mSub" style="font-size:12px;margin-top:3px"></div></div></div><button class="sec" onclick="document.getElementById('bgM').style.display='none'">Cerrar</button></div><div class="mbody" id="mBar"></div></div></div>
+
+<script>
+const META = {"season": "2026-27", "corte": "23/11/2026", "generado": "24/11/2026 07:25 PM", "fecha_hoy": "24/11/2026", "equipos_hoy": ["BOS", "DAL", "DEN", "DET", "ORL", "WAS"], "partidos_hoy": ["DET @ ORL", "BOS @ WAS", "DEN @ DAL"], "jugadores": [{"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629638.png", "equipo": "ATL", "equipo_nombre": "Atlanta Hawks", "juega_hoy": false, "color_prim": "#E03A3E", "color_sec": "#C1D32F", "jugador": "Nickeil Alexander-Walker", "ultimo_partido": "22/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 10.0, "tpm_pj": 3.6, "pct_3p": 35.9, "prob_1": 94.1, "prob_2": 88.2, "prob_3": 58.8, "max_3pm": 9, "freq": {"0": 1, "1": 1, "2": 5, "3": 1, "4": 4, "5": 2, "6": 2, "7": 0, "8": 0, "9": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630598.png", "equipo": "ATL", "equipo_nombre": "Atlanta Hawks", "juega_hoy": false, "color_prim": "#E03A3E", "color_sec": "#C1D32F", "jugador": "Aaron Wiggins", "ultimo_partido": "22/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 6.8, "tpm_pj": 2.8, "pct_3p": 40.5, "prob_1": 100.0, "prob_2": 76.5, "prob_3": 58.8, "max_3pm": 5, "freq": {"0": 0, "1": 4, "2": 3, "3": 4, "4": 5, "5": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630168.png", "equipo": "ATL", "equipo_nombre": "Atlanta Hawks", "juega_hoy": false, "color_prim": "#E03A3E", "color_sec": "#C1D32F", "jugador": "Onyeka Okongwu", "ultimo_partido": "22/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 5.5, "tpm_pj": 1.8, "pct_3p": 33.3, "prob_1": 82.4, "prob_2": 64.7, "prob_3": 17.6, "max_3pm": 5, "freq": {"0": 3, "1": 3, "2": 8, "3": 1, "4": 1, "5": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629008.png", "equipo": "BKN", "equipo_nombre": "Brooklyn Nets", "juega_hoy": false, "color_prim": "#111827", "color_sec": "#9CA3AF", "jugador": "Michael Porter Jr.", "ultimo_partido": "23/11/2026", "pj_str": "15/16", "pct_pj": 93.8, "tpa_pj": 8.1, "tpm_pj": 3.0, "pct_3p": 36.9, "prob_1": 86.7, "prob_2": 80.0, "prob_3": 66.7, "max_3pm": 6, "freq": {"0": 2, "1": 1, "2": 2, "3": 3, "4": 5, "5": 1, "6": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1628369.png", "equipo": "BOS", "equipo_nombre": "Boston Celtics", "juega_hoy": true, "color_prim": "#007A33", "color_sec": "#BA9653", "jugador": "Jayson Tatum", "ultimo_partido": "22/11/2026", "pj_str": "15/17", "pct_pj": 88.2, "tpa_pj": 8.1, "tpm_pj": 2.7, "pct_3p": 33.6, "prob_1": 93.3, "prob_2": 80.0, "prob_3": 53.3, "max_3pm": 5, "freq": {"0": 1, "1": 2, "2": 4, "3": 4, "4": 1, "5": 3}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/202331.png", "equipo": "BOS", "equipo_nombre": "Boston Celtics", "juega_hoy": true, "color_prim": "#007A33", "color_sec": "#BA9653", "jugador": "Paul George", "ultimo_partido": "21/11/2026", "pj_str": "14/17", "pct_pj": 82.4, "tpa_pj": 8.1, "tpm_pj": 3.3, "pct_3p": 40.7, "prob_1": 100.0, "prob_2": 78.6, "prob_3": 57.1, "max_3pm": 7, "freq": {"0": 0, "1": 3, "2": 3, "3": 3, "4": 0, "5": 3, "6": 1, "7": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630202.png", "equipo": "BOS", "equipo_nombre": "Boston Celtics", "juega_hoy": true, "color_prim": "#007A33", "color_sec": "#BA9653", "jugador": "Payton Pritchard", "ultimo_partido": "22/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 6.4, "tpm_pj": 2.2, "pct_3p": 33.9, "prob_1": 70.6, "prob_2": 58.8, "prob_3": 41.2, "max_3pm": 7, "freq": {"0": 5, "1": 2, "2": 3, "3": 2, "4": 4, "5": 0, "6": 0, "7": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1641706.png", "equipo": "CHA", "equipo_nombre": "Charlotte Hornets", "juega_hoy": false, "color_prim": "#1D1160", "color_sec": "#00788C", "jugador": "Brandon Miller", "ultimo_partido": "23/11/2026", "pj_str": "14/16", "pct_pj": 87.5, "tpa_pj": 10.2, "tpm_pj": 3.0, "pct_3p": 29.4, "prob_1": 92.9, "prob_2": 71.4, "prob_3": 71.4, "max_3pm": 5, "freq": {"0": 1, "1": 3, "2": 0, "3": 5, "4": 1, "5": 4}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629675.png", "equipo": "CHA", "equipo_nombre": "Charlotte Hornets", "juega_hoy": false, "color_prim": "#1D1160", "color_sec": "#00788C", "jugador": "Naz Reid", "ultimo_partido": "23/11/2026", "pj_str": "16/16", "pct_pj": 100.0, "tpa_pj": 7.5, "tpm_pj": 2.5, "pct_3p": 33.3, "prob_1": 93.8, "prob_2": 81.2, "prob_3": 43.8, "max_3pm": 5, "freq": {"0": 1, "1": 2, "2": 6, "3": 3, "4": 3, "5": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1628960.png", "equipo": "CHA", "equipo_nombre": "Charlotte Hornets", "juega_hoy": false, "color_prim": "#1D1160", "color_sec": "#00788C", "jugador": "Grayson Allen", "ultimo_partido": "15/11/2026", "pj_str": "13/16", "pct_pj": 81.2, "tpa_pj": 7.4, "tpm_pj": 3.4, "pct_3p": 45.8, "prob_1": 92.3, "prob_2": 84.6, "prob_3": 61.5, "max_3pm": 7, "freq": {"0": 1, "1": 1, "2": 3, "3": 2, "4": 2, "5": 2, "6": 1, "7": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1641824.png", "equipo": "CHI", "equipo_nombre": "Chicago Bulls", "juega_hoy": false, "color_prim": "#CE1141", "color_sec": "#1F2937", "jugador": "Matas Buzelis", "ultimo_partido": "23/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 5.9, "tpm_pj": 2.2, "pct_3p": 38.0, "prob_1": 82.4, "prob_2": 70.6, "prob_3": 47.1, "max_3pm": 5, "freq": {"0": 3, "1": 2, "2": 4, "3": 5, "4": 2, "5": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1627741.png", "equipo": "CHI", "equipo_nombre": "Chicago Bulls", "juega_hoy": false, "color_prim": "#CE1141", "color_sec": "#1F2937", "jugador": "Buddy Hield", "ultimo_partido": "23/11/2026", "pj_str": "15/17", "pct_pj": 88.2, "tpa_pj": 5.3, "tpm_pj": 2.3, "pct_3p": 42.5, "prob_1": 86.7, "prob_2": 53.3, "prob_3": 40.0, "max_3pm": 7, "freq": {"0": 2, "1": 5, "2": 2, "3": 2, "4": 3, "5": 0, "6": 0, "7": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630188.png", "equipo": "CHI", "equipo_nombre": "Chicago Bulls", "juega_hoy": false, "color_prim": "#CE1141", "color_sec": "#1F2937", "jugador": "Jalen Smith", "ultimo_partido": "23/11/2026", "pj_str": "15/17", "pct_pj": 88.2, "tpa_pj": 5.1, "tpm_pj": 2.1, "pct_3p": 40.3, "prob_1": 86.7, "prob_2": 60.0, "prob_3": 26.7, "max_3pm": 6, "freq": {"0": 2, "1": 4, "2": 5, "3": 2, "4": 0, "5": 1, "6": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1628378.png", "equipo": "CLE", "equipo_nombre": "Cleveland Cavaliers", "juega_hoy": false, "color_prim": "#860038", "color_sec": "#FDBB30", "jugador": "Donovan Mitchell", "ultimo_partido": "23/11/2026", "pj_str": "17/18", "pct_pj": 94.4, "tpa_pj": 7.3, "tpm_pj": 2.6, "pct_3p": 35.5, "prob_1": 100.0, "prob_2": 76.5, "prob_3": 29.4, "max_3pm": 5, "freq": {"0": 0, "1": 4, "2": 8, "3": 0, "4": 1, "5": 4}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/201935.png", "equipo": "CLE", "equipo_nombre": "Cleveland Cavaliers", "juega_hoy": false, "color_prim": "#860038", "color_sec": "#FDBB30", "jugador": "James Harden", "ultimo_partido": "23/11/2026", "pj_str": "17/18", "pct_pj": 94.4, "tpa_pj": 7.2, "tpm_pj": 2.9, "pct_3p": 39.8, "prob_1": 100.0, "prob_2": 88.2, "prob_3": 64.7, "max_3pm": 7, "freq": {"0": 0, "1": 2, "2": 4, "3": 9, "4": 0, "5": 1, "6": 0, "7": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1643509.png", "equipo": "CLE", "equipo_nombre": "Cleveland Cavaliers", "juega_hoy": false, "color_prim": "#860038", "color_sec": "#FDBB30", "jugador": "Meleek Thomas", "ultimo_partido": "23/11/2026", "pj_str": "15/18", "pct_pj": 83.3, "tpa_pj": 5.7, "tpm_pj": 2.3, "pct_3p": 40.7, "prob_1": 86.7, "prob_2": 73.3, "prob_3": 53.3, "max_3pm": 4, "freq": {"0": 2, "1": 2, "2": 3, "3": 5, "4": 3}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/202681.png", "equipo": "DAL", "equipo_nombre": "Dallas Mavericks", "juega_hoy": true, "color_prim": "#00538C", "color_sec": "#B8C4CA", "jugador": "Kyrie Irving", "ultimo_partido": "22/11/2026", "pj_str": "14/17", "pct_pj": 82.4, "tpa_pj": 8.8, "tpm_pj": 3.4, "pct_3p": 38.2, "prob_1": 92.9, "prob_2": 78.6, "prob_3": 57.1, "max_3pm": 7, "freq": {"0": 1, "1": 2, "2": 3, "3": 2, "4": 1, "5": 3, "6": 0, "7": 2}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629023.png", "equipo": "DAL", "equipo_nombre": "Dallas Mavericks", "juega_hoy": true, "color_prim": "#00538C", "color_sec": "#B8C4CA", "jugador": "P.J. Washington", "ultimo_partido": "18/11/2026", "pj_str": "15/17", "pct_pj": 88.2, "tpa_pj": 6.3, "tpm_pj": 2.3, "pct_3p": 36.2, "prob_1": 86.7, "prob_2": 73.3, "prob_3": 26.7, "max_3pm": 6, "freq": {"0": 2, "1": 2, "2": 7, "3": 1, "4": 1, "5": 1, "6": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1642843.png", "equipo": "DAL", "equipo_nombre": "Dallas Mavericks", "juega_hoy": true, "color_prim": "#00538C", "color_sec": "#B8C4CA", "jugador": "Cooper Flagg", "ultimo_partido": "22/11/2026", "pj_str": "16/17", "pct_pj": 94.1, "tpa_pj": 5.0, "tpm_pj": 1.6, "pct_3p": 32.5, "prob_1": 75.0, "prob_2": 56.2, "prob_3": 31.2, "max_3pm": 3, "freq": {"0": 4, "1": 3, "2": 4, "3": 5}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1627750.png", "equipo": "DEN", "equipo_nombre": "Denver Nuggets", "juega_hoy": true, "color_prim": "#0E2240", "color_sec": "#FEC524", "jugador": "Jamal Murray", "ultimo_partido": "22/11/2026", "pj_str": "15/15", "pct_pj": 100.0, "tpa_pj": 7.1, "tpm_pj": 3.3, "pct_3p": 47.2, "prob_1": 86.7, "prob_2": 73.3, "prob_3": 53.3, "max_3pm": 8, "freq": {"0": 2, "1": 2, "2": 3, "3": 1, "4": 2, "5": 2, "6": 1, "7": 1, "8": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629661.png", "equipo": "DEN", "equipo_nombre": "Denver Nuggets", "juega_hoy": true, "color_prim": "#0E2240", "color_sec": "#FEC524", "jugador": "Cameron Johnson", "ultimo_partido": "22/11/2026", "pj_str": "12/15", "pct_pj": 80.0, "tpa_pj": 5.3, "tpm_pj": 1.9, "pct_3p": 35.9, "prob_1": 83.3, "prob_2": 58.3, "prob_3": 25.0, "max_3pm": 4, "freq": {"0": 2, "1": 3, "2": 4, "3": 0, "4": 3}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630595.png", "equipo": "DET", "equipo_nombre": "Detroit Pistons", "juega_hoy": true, "color_prim": "#C8102E", "color_sec": "#1D42BA", "jugador": "Cade Cunningham", "ultimo_partido": "22/11/2026", "pj_str": "15/16", "pct_pj": 93.8, "tpa_pj": 6.1, "tpm_pj": 1.9, "pct_3p": 31.5, "prob_1": 93.3, "prob_2": 53.3, "prob_3": 33.3, "max_3pm": 4, "freq": {"0": 1, "1": 6, "2": 3, "3": 3, "4": 2}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1642450.png", "equipo": "DET", "equipo_nombre": "Detroit Pistons", "juega_hoy": true, "color_prim": "#C8102E", "color_sec": "#1D42BA", "jugador": "Daniss Jenkins", "ultimo_partido": "22/11/2026", "pj_str": "16/16", "pct_pj": 100.0, "tpa_pj": 5.1, "tpm_pj": 2.1, "pct_3p": 42.0, "prob_1": 93.8, "prob_2": 56.2, "prob_3": 31.2, "max_3pm": 8, "freq": {"0": 1, "1": 6, "2": 4, "3": 4, "4": 0, "5": 0, "6": 0, "7": 0, "8": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1641764.png", "equipo": "GSW", "equipo_nombre": "Golden State Warriors", "juega_hoy": false, "color_prim": "#1D428A", "color_sec": "#FFC72C", "jugador": "Brandin Podziemski", "ultimo_partido": "22/11/2026", "pj_str": "15/17", "pct_pj": 88.2, "tpa_pj": 7.0, "tpm_pj": 2.5, "pct_3p": 36.2, "prob_1": 80.0, "prob_2": 80.0, "prob_3": 53.3, "max_3pm": 5, "freq": {"0": 3, "1": 0, "2": 4, "3": 3, "4": 4, "5": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1642865.png", "equipo": "GSW", "equipo_nombre": "Golden State Warriors", "juega_hoy": false, "color_prim": "#1D428A", "color_sec": "#FFC72C", "jugador": "Yaxel Lendeborg", "ultimo_partido": "22/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 5.3, "tpm_pj": 1.9, "pct_3p": 36.7, "prob_1": 88.2, "prob_2": 47.1, "prob_3": 17.6, "max_3pm": 6, "freq": {"0": 2, "1": 7, "2": 5, "3": 0, "4": 1, "5": 0, "6": 2}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629001.png", "equipo": "GSW", "equipo_nombre": "Golden State Warriors", "juega_hoy": false, "color_prim": "#1D428A", "color_sec": "#FFC72C", "jugador": "De'Anthony Melton", "ultimo_partido": "22/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 5.1, "tpm_pj": 1.9, "pct_3p": 36.8, "prob_1": 70.6, "prob_2": 52.9, "prob_3": 29.4, "max_3pm": 6, "freq": {"0": 5, "1": 3, "2": 4, "3": 1, "4": 3, "5": 0, "6": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1627832.png", "equipo": "HOU", "equipo_nombre": "Houston Rockets", "juega_hoy": false, "color_prim": "#CE1141", "color_sec": "#9CA3AF", "jugador": "Fred VanVleet", "ultimo_partido": "23/11/2026", "pj_str": "15/18", "pct_pj": 83.3, "tpa_pj": 7.2, "tpm_pj": 2.8, "pct_3p": 38.9, "prob_1": 93.3, "prob_2": 93.3, "prob_3": 66.7, "max_3pm": 4, "freq": {"0": 1, "1": 0, "2": 4, "3": 6, "4": 4}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1642263.png", "equipo": "HOU", "equipo_nombre": "Houston Rockets", "juega_hoy": false, "color_prim": "#CE1141", "color_sec": "#9CA3AF", "jugador": "Reed Sheppard", "ultimo_partido": "23/11/2026", "pj_str": "15/18", "pct_pj": 83.3, "tpa_pj": 6.2, "tpm_pj": 2.1, "pct_3p": 34.4, "prob_1": 86.7, "prob_2": 60.0, "prob_3": 33.3, "max_3pm": 6, "freq": {"0": 2, "1": 4, "2": 4, "3": 3, "4": 0, "5": 1, "6": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1631095.png", "equipo": "HOU", "equipo_nombre": "Houston Rockets", "juega_hoy": false, "color_prim": "#CE1141", "color_sec": "#9CA3AF", "jugador": "Jabari Smith Jr.", "ultimo_partido": "23/11/2026", "pj_str": "18/18", "pct_pj": 100.0, "tpa_pj": 5.9, "tpm_pj": 2.3, "pct_3p": 39.6, "prob_1": 100.0, "prob_2": 66.7, "prob_3": 38.9, "max_3pm": 6, "freq": {"0": 0, "1": 6, "2": 5, "3": 4, "4": 2, "5": 0, "6": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630174.png", "equipo": "IND", "equipo_nombre": "Indiana Pacers", "juega_hoy": false, "color_prim": "#002D62", "color_sec": "#FDBB30", "jugador": "Aaron Nesmith", "ultimo_partido": "22/11/2026", "pj_str": "15/18", "pct_pj": 83.3, "tpa_pj": 5.1, "tpm_pj": 1.3, "pct_3p": 26.3, "prob_1": 60.0, "prob_2": 46.7, "prob_3": 20.0, "max_3pm": 4, "freq": {"0": 6, "1": 2, "2": 4, "3": 2, "4": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629636.png", "equipo": "LAC", "equipo_nombre": "LA Clippers", "juega_hoy": false, "color_prim": "#C8102E", "color_sec": "#1D428A", "jugador": "Darius Garland", "ultimo_partido": "23/11/2026", "pj_str": "16/16", "pct_pj": 100.0, "tpa_pj": 7.1, "tpm_pj": 2.6, "pct_3p": 36.0, "prob_1": 100.0, "prob_2": 75.0, "prob_3": 56.2, "max_3pm": 4, "freq": {"0": 0, "1": 4, "2": 3, "3": 5, "4": 4}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629060.png", "equipo": "LAC", "equipo_nombre": "LA Clippers", "juega_hoy": false, "color_prim": "#C8102E", "color_sec": "#1D428A", "jugador": "Rui Hachimura", "ultimo_partido": "23/11/2026", "pj_str": "14/16", "pct_pj": 87.5, "tpa_pj": 5.4, "tpm_pj": 2.2, "pct_3p": 41.3, "prob_1": 92.9, "prob_2": 71.4, "prob_3": 35.7, "max_3pm": 4, "freq": {"0": 1, "1": 3, "2": 5, "3": 2, "4": 3}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629029.png", "equipo": "LAL", "equipo_nombre": "Los Angeles Lakers", "juega_hoy": false, "color_prim": "#552583", "color_sec": "#FDB927", "jugador": "Luka Dončić", "ultimo_partido": "23/11/2026", "pj_str": "16/18", "pct_pj": 88.9, "tpa_pj": 13.2, "tpm_pj": 4.8, "pct_3p": 36.5, "prob_1": 100.0, "prob_2": 100.0, "prob_3": 81.2, "max_3pm": 8, "freq": {"0": 0, "1": 0, "2": 3, "3": 2, "4": 0, "5": 5, "6": 4, "7": 0, "8": 2}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1643409.png", "equipo": "MEM", "equipo_nombre": "Memphis Grizzlies", "juega_hoy": false, "color_prim": "#5D76A9", "color_sec": "#12173F", "jugador": "Cameron Boozer", "ultimo_partido": "19/11/2026", "pj_str": "16/18", "pct_pj": 88.9, "tpa_pj": 5.6, "tpm_pj": 1.8, "pct_3p": 32.2, "prob_1": 68.8, "prob_2": 50.0, "prob_3": 25.0, "max_3pm": 7, "freq": {"0": 5, "1": 3, "2": 4, "3": 1, "4": 2, "5": 0, "6": 0, "7": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1642907.png", "equipo": "MEM", "equipo_nombre": "Memphis Grizzlies", "juega_hoy": false, "color_prim": "#5D76A9", "color_sec": "#12173F", "jugador": "Cedric Coward", "ultimo_partido": "23/11/2026", "pj_str": "17/18", "pct_pj": 94.4, "tpa_pj": 5.5, "tpm_pj": 2.5, "pct_3p": 44.7, "prob_1": 88.2, "prob_2": 70.6, "prob_3": 47.1, "max_3pm": 5, "freq": {"0": 2, "1": 3, "2": 4, "3": 2, "4": 5, "5": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/202691.png", "equipo": "MIA", "equipo_nombre": "Miami Heat", "juega_hoy": false, "color_prim": "#98002E", "color_sec": "#F9A01B", "jugador": "Klay Thompson", "ultimo_partido": "22/11/2026", "pj_str": "15/16", "pct_pj": 93.8, "tpa_pj": 9.3, "tpm_pj": 4.0, "pct_3p": 43.2, "prob_1": 100.0, "prob_2": 93.3, "prob_3": 66.7, "max_3pm": 8, "freq": {"0": 0, "1": 1, "2": 4, "3": 2, "4": 3, "5": 1, "6": 1, "7": 2, "8": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630558.png", "equipo": "MIA", "equipo_nombre": "Miami Heat", "juega_hoy": false, "color_prim": "#98002E", "color_sec": "#F9A01B", "jugador": "Davion Mitchell", "ultimo_partido": "22/11/2026", "pj_str": "16/16", "pct_pj": 100.0, "tpa_pj": 5.6, "tpm_pj": 2.4, "pct_3p": 43.3, "prob_1": 87.5, "prob_2": 68.8, "prob_3": 56.2, "max_3pm": 6, "freq": {"0": 2, "1": 3, "2": 2, "3": 6, "4": 2, "5": 0, "6": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629639.png", "equipo": "MIL", "equipo_nombre": "Milwaukee Bucks", "juega_hoy": false, "color_prim": "#00471B", "color_sec": "#EEE1C6", "jugador": "Tyler Herro", "ultimo_partido": "23/11/2026", "pj_str": "17/18", "pct_pj": 94.4, "tpa_pj": 7.4, "tpm_pj": 2.9, "pct_3p": 39.7, "prob_1": 88.2, "prob_2": 70.6, "prob_3": 58.8, "max_3pm": 7, "freq": {"0": 2, "1": 3, "2": 2, "3": 1, "4": 7, "5": 1, "6": 0, "7": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1628398.png", "equipo": "MIL", "equipo_nombre": "Milwaukee Bucks", "juega_hoy": false, "color_prim": "#00471B", "color_sec": "#EEE1C6", "jugador": "Kyle Kuzma", "ultimo_partido": "23/11/2026", "pj_str": "17/18", "pct_pj": 94.4, "tpa_pj": 5.1, "tpm_pj": 1.7, "pct_3p": 33.3, "prob_1": 82.4, "prob_2": 47.1, "prob_3": 17.6, "max_3pm": 6, "freq": {"0": 3, "1": 6, "2": 5, "3": 1, "4": 1, "5": 0, "6": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630163.png", "equipo": "MIN", "equipo_nombre": "Minnesota Timberwolves", "juega_hoy": false, "color_prim": "#0C2340", "color_sec": "#78BE20", "jugador": "LaMelo Ball", "ultimo_partido": "23/11/2026", "pj_str": "18/18", "pct_pj": 100.0, "tpa_pj": 9.2, "tpm_pj": 3.2, "pct_3p": 34.9, "prob_1": 94.4, "prob_2": 83.3, "prob_3": 61.1, "max_3pm": 6, "freq": {"0": 1, "1": 2, "2": 4, "3": 3, "4": 4, "5": 1, "6": 3}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630180.png", "equipo": "NOP", "equipo_nombre": "New Orleans Pelicans", "juega_hoy": false, "color_prim": "#0C2340", "color_sec": "#C8102E", "jugador": "Saddiq Bey", "ultimo_partido": "23/11/2026", "pj_str": "19/19", "pct_pj": 100.0, "tpa_pj": 6.3, "tpm_pj": 2.3, "pct_3p": 36.1, "prob_1": 94.7, "prob_2": 68.4, "prob_3": 31.6, "max_3pm": 6, "freq": {"0": 1, "1": 5, "2": 7, "3": 3, "4": 1, "5": 1, "6": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1628973.png", "equipo": "NYK", "equipo_nombre": "New York Knicks", "juega_hoy": false, "color_prim": "#006BB6", "color_sec": "#F58426", "jugador": "Jalen Brunson", "ultimo_partido": "22/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 7.4, "tpm_pj": 3.0, "pct_3p": 40.5, "prob_1": 94.1, "prob_2": 70.6, "prob_3": 64.7, "max_3pm": 6, "freq": {"0": 1, "1": 4, "2": 1, "3": 4, "4": 4, "5": 1, "6": 2}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1628384.png", "equipo": "NYK", "equipo_nombre": "New York Knicks", "juega_hoy": false, "color_prim": "#006BB6", "color_sec": "#F58426", "jugador": "OG Anunoby", "ultimo_partido": "19/11/2026", "pj_str": "15/17", "pct_pj": 88.2, "tpa_pj": 6.2, "tpm_pj": 2.0, "pct_3p": 32.3, "prob_1": 100.0, "prob_2": 60.0, "prob_3": 26.7, "max_3pm": 5, "freq": {"0": 0, "1": 6, "2": 5, "3": 3, "4": 0, "5": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629013.png", "equipo": "NYK", "equipo_nombre": "New York Knicks", "juega_hoy": false, "color_prim": "#006BB6", "color_sec": "#F58426", "jugador": "Landry Shamet", "ultimo_partido": "22/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 5.6, "tpm_pj": 2.5, "pct_3p": 44.2, "prob_1": 94.1, "prob_2": 76.5, "prob_3": 41.2, "max_3pm": 6, "freq": {"0": 1, "1": 3, "2": 6, "3": 3, "4": 3, "5": 0, "6": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1642272.png", "equipo": "OKC", "equipo_nombre": "Oklahoma City Thunder", "juega_hoy": false, "color_prim": "#007AC1", "color_sec": "#EF3B24", "jugador": "Jared McCain", "ultimo_partido": "23/11/2026", "pj_str": "18/18", "pct_pj": 100.0, "tpa_pj": 7.0, "tpm_pj": 2.3, "pct_3p": 32.5, "prob_1": 77.8, "prob_2": 55.6, "prob_3": 38.9, "max_3pm": 7, "freq": {"0": 4, "1": 4, "2": 3, "3": 2, "4": 3, "5": 0, "6": 1, "7": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1628983.png", "equipo": "OKC", "equipo_nombre": "Oklahoma City Thunder", "juega_hoy": false, "color_prim": "#007AC1", "color_sec": "#EF3B24", "jugador": "Shai Gilgeous-Alexander", "ultimo_partido": "23/11/2026", "pj_str": "17/18", "pct_pj": 94.4, "tpa_pj": 6.6, "tpm_pj": 2.5, "pct_3p": 37.5, "prob_1": 88.2, "prob_2": 64.7, "prob_3": 58.8, "max_3pm": 5, "freq": {"0": 2, "1": 4, "2": 1, "3": 5, "4": 4, "5": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630217.png", "equipo": "ORL", "equipo_nombre": "Orlando Magic", "juega_hoy": true, "color_prim": "#0077C0", "color_sec": "#C4CED4", "jugador": "Desmond Bane", "ultimo_partido": "22/11/2026", "pj_str": "15/16", "pct_pj": 93.8, "tpa_pj": 9.9, "tpm_pj": 4.2, "pct_3p": 42.6, "prob_1": 100.0, "prob_2": 93.3, "prob_3": 86.7, "max_3pm": 7, "freq": {"0": 0, "1": 1, "2": 1, "3": 4, "4": 3, "5": 2, "6": 2, "7": 2}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1641783.png", "equipo": "ORL", "equipo_nombre": "Orlando Magic", "juega_hoy": true, "color_prim": "#0077C0", "color_sec": "#C4CED4", "jugador": "Tristan da Silva", "ultimo_partido": "22/11/2026", "pj_str": "14/16", "pct_pj": 87.5, "tpa_pj": 7.9, "tpm_pj": 3.2, "pct_3p": 40.9, "prob_1": 100.0, "prob_2": 92.9, "prob_3": 57.1, "max_3pm": 5, "freq": {"0": 0, "1": 1, "2": 5, "3": 1, "4": 4, "5": 3}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1641710.png", "equipo": "ORL", "equipo_nombre": "Orlando Magic", "juega_hoy": true, "color_prim": "#0077C0", "color_sec": "#C4CED4", "jugador": "Anthony Black", "ultimo_partido": "22/11/2026", "pj_str": "13/16", "pct_pj": 81.2, "tpa_pj": 5.2, "tpm_pj": 2.1, "pct_3p": 40.3, "prob_1": 92.3, "prob_2": 69.2, "prob_3": 30.8, "max_3pm": 5, "freq": {"0": 1, "1": 3, "2": 5, "3": 3, "4": 0, "5": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630178.png", "equipo": "PHI", "equipo_nombre": "Philadelphia 76ers", "juega_hoy": false, "color_prim": "#006BB6", "color_sec": "#ED174C", "jugador": "Tyrese Maxey", "ultimo_partido": "23/11/2026", "pj_str": "17/18", "pct_pj": 94.4, "tpa_pj": 6.9, "tpm_pj": 2.5, "pct_3p": 36.4, "prob_1": 94.1, "prob_2": 76.5, "prob_3": 52.9, "max_3pm": 5, "freq": {"0": 1, "1": 3, "2": 4, "3": 5, "4": 3, "5": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629014.png", "equipo": "PHI", "equipo_nombre": "Philadelphia 76ers", "juega_hoy": false, "color_prim": "#006BB6", "color_sec": "#ED174C", "jugador": "Anfernee Simons", "ultimo_partido": "23/11/2026", "pj_str": "18/18", "pct_pj": 100.0, "tpa_pj": 5.6, "tpm_pj": 2.3, "pct_3p": 40.6, "prob_1": 83.3, "prob_2": 44.4, "prob_3": 44.4, "max_3pm": 6, "freq": {"0": 3, "1": 7, "2": 0, "3": 3, "4": 1, "5": 3, "6": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1631221.png", "equipo": "PHX", "equipo_nombre": "Phoenix Suns", "juega_hoy": false, "color_prim": "#1D1160", "color_sec": "#E56020", "jugador": "Collin Gillespie", "ultimo_partido": "23/11/2026", "pj_str": "16/16", "pct_pj": 100.0, "tpa_pj": 6.2, "tpm_pj": 2.3, "pct_3p": 37.0, "prob_1": 87.5, "prob_2": 75.0, "prob_3": 43.8, "max_3pm": 5, "freq": {"0": 2, "1": 2, "2": 5, "3": 4, "4": 2, "5": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1626164.png", "equipo": "PHX", "equipo_nombre": "Phoenix Suns", "juega_hoy": false, "color_prim": "#1D1160", "color_sec": "#E56020", "jugador": "Devin Booker", "ultimo_partido": "23/11/2026", "pj_str": "16/16", "pct_pj": 100.0, "tpa_pj": 5.6, "tpm_pj": 1.9, "pct_3p": 33.7, "prob_1": 81.2, "prob_2": 68.8, "prob_3": 25.0, "max_3pm": 4, "freq": {"0": 3, "1": 2, "2": 7, "3": 2, "4": 2}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1628970.png", "equipo": "PHX", "equipo_nombre": "Phoenix Suns", "juega_hoy": false, "color_prim": "#1D1160", "color_sec": "#E56020", "jugador": "Miles Bridges", "ultimo_partido": "23/11/2026", "pj_str": "16/16", "pct_pj": 100.0, "tpa_pj": 5.2, "tpm_pj": 1.7, "pct_3p": 32.1, "prob_1": 81.2, "prob_2": 62.5, "prob_3": 18.8, "max_3pm": 4, "freq": {"0": 3, "1": 3, "2": 7, "3": 2, "4": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/203081.png", "equipo": "POR", "equipo_nombre": "Portland Trail Blazers", "juega_hoy": false, "color_prim": "#E03A3E", "color_sec": "#9CA3AF", "jugador": "Damian Lillard", "ultimo_partido": "23/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 8.9, "tpm_pj": 3.0, "pct_3p": 33.6, "prob_1": 100.0, "prob_2": 76.5, "prob_3": 47.1, "max_3pm": 6, "freq": {"0": 0, "1": 4, "2": 5, "3": 1, "4": 3, "5": 2, "6": 2}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1641739.png", "equipo": "POR", "equipo_nombre": "Portland Trail Blazers", "juega_hoy": false, "color_prim": "#E03A3E", "color_sec": "#9CA3AF", "jugador": "Toumani Camara", "ultimo_partido": "23/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 6.7, "tpm_pj": 2.5, "pct_3p": 36.8, "prob_1": 88.2, "prob_2": 70.6, "prob_3": 47.1, "max_3pm": 5, "freq": {"0": 2, "1": 3, "2": 4, "3": 2, "4": 5, "5": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/201950.png", "equipo": "POR", "equipo_nombre": "Portland Trail Blazers", "juega_hoy": false, "color_prim": "#E03A3E", "color_sec": "#9CA3AF", "jugador": "Jrue Holiday", "ultimo_partido": "23/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 5.6, "tpm_pj": 2.5, "pct_3p": 44.2, "prob_1": 88.2, "prob_2": 76.5, "prob_3": 41.2, "max_3pm": 5, "freq": {"0": 2, "1": 2, "2": 6, "3": 3, "4": 1, "5": 3}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1643411.png", "equipo": "SAC", "equipo_nombre": "Sacramento Kings", "juega_hoy": false, "color_prim": "#5A2D81", "color_sec": "#63727A", "jugador": "Darius Acuff Jr.", "ultimo_partido": "23/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 9.2, "tpm_pj": 2.9, "pct_3p": 32.1, "prob_1": 88.2, "prob_2": 88.2, "prob_3": 58.8, "max_3pm": 9, "freq": {"0": 2, "1": 0, "2": 5, "3": 7, "4": 1, "5": 0, "6": 1, "7": 0, "8": 0, "9": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/203897.png", "equipo": "SAC", "equipo_nombre": "Sacramento Kings", "juega_hoy": false, "color_prim": "#5A2D81", "color_sec": "#63727A", "jugador": "Zach LaVine", "ultimo_partido": "23/11/2026", "pj_str": "16/17", "pct_pj": 94.1, "tpa_pj": 6.7, "tpm_pj": 2.6, "pct_3p": 39.3, "prob_1": 93.8, "prob_2": 81.2, "prob_3": 56.2, "max_3pm": 6, "freq": {"0": 1, "1": 2, "2": 4, "3": 7, "4": 0, "5": 1, "6": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629631.png", "equipo": "SAC", "equipo_nombre": "Sacramento Kings", "juega_hoy": false, "color_prim": "#5A2D81", "color_sec": "#63727A", "jugador": "De'Andre Hunter", "ultimo_partido": "23/11/2026", "pj_str": "15/17", "pct_pj": 88.2, "tpa_pj": 5.3, "tpm_pj": 2.1, "pct_3p": 40.0, "prob_1": 86.7, "prob_2": 66.7, "prob_3": 26.7, "max_3pm": 5, "freq": {"0": 2, "1": 3, "2": 6, "3": 1, "4": 1, "5": 2}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630577.png", "equipo": "SAS", "equipo_nombre": "San Antonio Spurs", "juega_hoy": false, "color_prim": "#1F2937", "color_sec": "#C4CED4", "jugador": "Julian Champagnie", "ultimo_partido": "23/11/2026", "pj_str": "18/18", "pct_pj": 100.0, "tpa_pj": 7.1, "tpm_pj": 2.9, "pct_3p": 41.7, "prob_1": 94.4, "prob_2": 83.3, "prob_3": 55.6, "max_3pm": 8, "freq": {"0": 1, "1": 2, "2": 5, "3": 5, "4": 3, "5": 0, "6": 1, "7": 0, "8": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1641705.png", "equipo": "SAS", "equipo_nombre": "San Antonio Spurs", "juega_hoy": false, "color_prim": "#1F2937", "color_sec": "#C4CED4", "jugador": "Victor Wembanyama", "ultimo_partido": "21/11/2026", "pj_str": "17/18", "pct_pj": 94.4, "tpa_pj": 6.5, "tpm_pj": 2.1, "pct_3p": 31.5, "prob_1": 76.5, "prob_2": 64.7, "prob_3": 35.3, "max_3pm": 5, "freq": {"0": 4, "1": 2, "2": 5, "3": 2, "4": 3, "5": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1642264.png", "equipo": "SAS", "equipo_nombre": "San Antonio Spurs", "juega_hoy": false, "color_prim": "#1F2937", "color_sec": "#C4CED4", "jugador": "Stephon Castle", "ultimo_partido": "23/11/2026", "pj_str": "18/18", "pct_pj": 100.0, "tpa_pj": 5.9, "tpm_pj": 2.3, "pct_3p": 38.3, "prob_1": 83.3, "prob_2": 66.7, "prob_3": 38.9, "max_3pm": 5, "freq": {"0": 3, "1": 3, "2": 5, "3": 3, "4": 1, "5": 3}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1630193.png", "equipo": "TOR", "equipo_nombre": "Toronto Raptors", "juega_hoy": false, "color_prim": "#CE1141", "color_sec": "#A1A1A4", "jugador": "Immanuel Quickley", "ultimo_partido": "23/11/2026", "pj_str": "15/17", "pct_pj": 88.2, "tpa_pj": 7.7, "tpm_pj": 2.6, "pct_3p": 33.6, "prob_1": 93.3, "prob_2": 80.0, "prob_3": 60.0, "max_3pm": 4, "freq": {"0": 1, "1": 2, "2": 3, "3": 5, "4": 4}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1642266.png", "equipo": "TOR", "equipo_nombre": "Toronto Raptors", "juega_hoy": false, "color_prim": "#CE1141", "color_sec": "#A1A1A4", "jugador": "Ja'Kobe Walter", "ultimo_partido": "23/11/2026", "pj_str": "17/17", "pct_pj": 100.0, "tpa_pj": 7.2, "tpm_pj": 2.5, "pct_3p": 34.4, "prob_1": 94.1, "prob_2": 64.7, "prob_3": 41.2, "max_3pm": 7, "freq": {"0": 1, "1": 5, "2": 4, "3": 4, "4": 0, "5": 2, "6": 0, "7": 1}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629628.png", "equipo": "TOR", "equipo_nombre": "Toronto Raptors", "juega_hoy": false, "color_prim": "#CE1141", "color_sec": "#A1A1A4", "jugador": "RJ Barrett", "ultimo_partido": "17/11/2026", "pj_str": "14/17", "pct_pj": 82.4, "tpa_pj": 5.3, "tpm_pj": 1.5, "pct_3p": 28.4, "prob_1": 64.3, "prob_2": 42.9, "prob_3": 28.6, "max_3pm": 4, "freq": {"0": 5, "1": 3, "2": 2, "3": 2, "4": 2}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1641718.png", "equipo": "UTA", "equipo_nombre": "Utah Jazz", "juega_hoy": false, "color_prim": "#002B5C", "color_sec": "#F9A01B", "jugador": "Keyonte George", "ultimo_partido": "23/11/2026", "pj_str": "18/19", "pct_pj": 94.7, "tpa_pj": 6.6, "tpm_pj": 2.1, "pct_3p": 32.2, "prob_1": 77.8, "prob_2": 61.1, "prob_3": 33.3, "max_3pm": 5, "freq": {"0": 4, "1": 3, "2": 5, "3": 1, "4": 3, "5": 2}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1643408.png", "equipo": "UTA", "equipo_nombre": "Utah Jazz", "juega_hoy": false, "color_prim": "#002B5C", "color_sec": "#F9A01B", "jugador": "Darryn Peterson", "ultimo_partido": "23/11/2026", "pj_str": "19/19", "pct_pj": 100.0, "tpa_pj": 5.9, "tpm_pj": 1.8, "pct_3p": 31.0, "prob_1": 68.4, "prob_2": 57.9, "prob_3": 42.1, "max_3pm": 4, "freq": {"0": 6, "1": 2, "2": 3, "3": 5, "4": 3}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1642846.png", "equipo": "UTA", "equipo_nombre": "Utah Jazz", "juega_hoy": false, "color_prim": "#002B5C", "color_sec": "#F9A01B", "jugador": "Ace Bailey", "ultimo_partido": "23/11/2026", "pj_str": "19/19", "pct_pj": 100.0, "tpa_pj": 5.7, "tpm_pj": 1.5, "pct_3p": 26.6, "prob_1": 89.5, "prob_2": 36.8, "prob_3": 26.3, "max_3pm": 3, "freq": {"0": 2, "1": 10, "2": 2, "3": 5}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1629027.png", "equipo": "WAS", "equipo_nombre": "Washington Wizards", "juega_hoy": true, "color_prim": "#002B5C", "color_sec": "#E31837", "jugador": "Trae Young", "ultimo_partido": "22/11/2026", "pj_str": "18/18", "pct_pj": 100.0, "tpa_pj": 6.5, "tpm_pj": 2.1, "pct_3p": 32.5, "prob_1": 83.3, "prob_2": 61.1, "prob_3": 44.4, "max_3pm": 4, "freq": {"0": 3, "1": 4, "2": 3, "3": 4, "4": 4}}, {"foto": "https://cdn.nba.com/headshots/nba/latest/1040x760/1642273.png", "equipo": "WAS", "equipo_nombre": "Washington Wizards", "juega_hoy": true, "color_prim": "#002B5C", "color_sec": "#E31837", "jugador": "Kyshawn George", "ultimo_partido": "22/11/2026", "pj_str": "18/18", "pct_pj": 100.0, "tpa_pj": 6.2, "tpm_pj": 2.6, "pct_3p": 41.4, "prob_1": 88.9, "prob_2": 66.7, "prob_3": 44.4, "max_3pm": 6, "freq": {"0": 2, "1": 4, "2": 4, "3": 2, "4": 3, "5": 2, "6": 1}}]};
+const DATA = META.jugadores || [];
+const HAY_HOY = DATA.some(d => d.juega_hoy);
+let LIVE_MAP = {};
+let LIVE_PARTIDOS = [];
+let LIVE_ACTUALIZADO = '';
+
+if (!HAY_HOY) {
+  document.getElementById('soloHoy').value = 'todos';
+}
+
+function getLiveJugador(nombre) {
+  return LIVE_MAP[(nombre || '').toLowerCase()] || null;
+}
+
+function badgeLiveHtml(info) {
+  if (!info) return '';
+  const tagLive = info.es_live ? '<span class="live-badge">LIVE</span>' : '';
+  const stat3p = `<span class="live-stat">${info['3pm_live']}/${info['3pa_live']} 3P</span>`;
+  return tagLive + stat3p;
+}
+
+function renderSlate() {
+  const box = document.getElementById('slateBox');
+  const listaPartidos = LIVE_PARTIDOS.length ? LIVE_PARTIDOS : (META.partidos_hoy || []).map(m => ({ matchup: m, status_text: '', es_live: false }));
+  if (listaPartidos.length) {
+    box.innerHTML = `<div class="slate-title">Partidos del dia (${META.fecha_hoy}) — ${listaPartidos.length} encuentros</div>
+      <div class="match-list">${listaPartidos.map(m => {
+        const cls = m.es_live ? 'match-pill match-live' : 'match-pill';
+        const liveTxt = m.es_live ? ' <span class="live-badge">LIVE</span>' : '';
+        const est = m.status_text ? ` · ${m.status_text}` : '';
+        return `<span class="${cls}">${m.matchup}${est}${liveTxt}</span>`;
+      }).join('')}</div>`;
+  } else {
+    box.innerHTML = `<div class="slate-title">Jornada (${META.fecha_hoy})</div>
+      <div style="font-size:12px;color:#94a3b8;">No se detectaron encuentros en el calendario del dia o el servidor aun no publica la cartelera; se muestra el universo completo de jugadores elegibles.</div>`;
+  }
+}
+
+function scoreCandidato(d, metaTriples) {
+  const prob = metaTriples === 1 ? d.prob_1 : (metaTriples === 2 ? d.prob_2 : d.prob_3);
+  return prob + (d.tpa_pj * 1.5);
+}
+
+function abrirModalJugador(d) {
+  const lv = getLiveJugador(d.jugador);
+  document.getElementById('mBan').style.background = `linear-gradient(135deg,${d.color_prim},#0f172a 125%)`;
+  document.getElementById('modBox').style.borderColor = d.color_prim;
+  const f = document.getElementById('mFoto');
+  f.style.visibility = 'visible';
+  f.src = d.foto;
+  document.getElementById('mTit').innerHTML = `${d.jugador}${lv && lv.es_live ? '<span class="live-badge">LIVE</span>' : ''}`;
+  document.getElementById('mSub').textContent = `${d.equipo_nombre} (${d.equipo}) · Prob 1T+: ${d.prob_1}% · 2T+: ${d.prob_2}% · 3T+: ${d.prob_3}% · Ult. PJ: ${d.ultimo_partido}`;
+  const ent = Object.entries(d.freq);
+  const mx = Math.max(1, ...ent.map(([, v]) => v));
+  const liveBox = lv
+    ? `<div class="live-box-modal"><strong>${lv.es_live ? 'EN VIVO' : 'JUEGO DE HOY'} (${lv.estado_juego || 'Activo'}):</strong> Triples encestados/lanzados: <strong>${lv['3pm_live']} / ${lv['3pa_live']}</strong> · Puntos: <strong>${lv.pts_live}</strong></div>`
+    : '';
+  document.getElementById('mBar').innerHTML = liveBox + ent.map(([k, v]) => `<div class="brow"><div><strong>${k}</strong> triple${k==='1'?'':'s'}</div><div class="btrk"><div class="bfil" style="width:${Math.round(v/mx*100)}%;background:linear-gradient(90deg,${d.color_prim},${d.color_sec})"></div></div><div style="text-align:right"><strong>${v}</strong> PJ</div></div>`).join('');
+  document.getElementById('bgM').style.display = 'flex';
+}
+
+function renderRecomendaciones(poolBase) {
+  const base = poolBase.length ? poolBase : DATA;
+  const config = [
+    { meta: 1, titulo: 'Top 5 Confiables — 1+ Triple', campo: 'prob_1' },
+    { meta: 2, titulo: 'Top 5 Confiables — 2+ Triples', campo: 'prob_2' },
+    { meta: 3, titulo: 'Top 5 Confiables — Max 3+ Triples', campo: 'prob_3' }
+  ];
+  document.getElementById('recsBox').innerHTML = config.map(c => {
+    const top = [...base]
+      .sort((a, b) => scoreCandidato(b, c.meta) - scoreCandidato(a, c.meta))
+      .slice(0, 5);
+    const items = top.map((d, i) => {
+      const lv = getLiveJugador(d.jugador);
+      return `<div class="rec-item" data-idx="${i}" data-meta="${c.meta}">
+        <div>
+          <strong>#${i+1} ${d.jugador}</strong>
+          <span style="color:#94a3b8">(${d.equipo} · ${d.tpa_pj} 3PA/J)</span>
+          ${badgeLiveHtml(lv)}
+        </div>
+        <span class="prob-tag">${d[c.campo]}%</span>
+      </div>`;
+    }).join('');
+    return `<div class="rec-card"><div class="rec-head"><span>${c.titulo}</span><span style="font-size:11px;color:#94a3b8">Prob. historica</span></div>${items}</div>`;
+  }).join('');
+
+  document.querySelectorAll('.rec-item').forEach(el => {
+    const meta = Number(el.getAttribute('data-meta'));
+    const idx = Number(el.getAttribute('data-idx'));
+    const listaOrdenada = [...base].sort((a, b) => scoreCandidato(b, meta) - scoreCandidato(a, meta));
+    el.onclick = () => abrirModalJugador(listaOrdenada[idx]);
+  });
+}
+
+[...new Set(DATA.map(d => d.equipo))].sort().forEach(e => {
+  const info = DATA.find(x => x.equipo === e);
+  const o = document.createElement('option');
+  o.value = e;
+  o.textContent = e + ' - ' + (info ? info.equipo_nombre : e);
+  document.getElementById('eq').appendChild(o);
+});
+
+function resetF() {
+  document.getElementById('q').value = '';
+  document.getElementById('eq').value = '';
+  document.getElementById('soloHoy').value = HAY_HOY ? 'hoy' : 'todos';
+  document.getElementById('ord').value = 'p2';
+  render();
+}
+
+function render() {
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  const soloHoy = document.getElementById('soloHoy').value;
+  const eq = document.getElementById('eq').value;
+  const ord = document.getElementById('ord').value;
+
+  const poolHoy = HAY_HOY ? DATA.filter(d => d.juega_hoy) : DATA;
+  renderSlate();
+  renderRecomendaciones(poolHoy);
+
+  let L = DATA.filter(d =>
+    (soloHoy !== 'hoy' || !HAY_HOY || d.juega_hoy) &&
+    (!eq || d.equipo === eq) &&
+    (!q || d.jugador.toLowerCase().includes(q) || d.equipo.toLowerCase().includes(q) || d.equipo_nombre.toLowerCase().includes(q))
+  );
+
+  const cmp = {
+    p2: (a, b) => b.prob_2 - a.prob_2 || b.prob_1 - a.prob_1,
+    p1: (a, b) => b.prob_1 - a.prob_1 || b.prob_2 - a.prob_2,
+    p3: (a, b) => b.prob_3 - a.prob_3 || b.prob_2 - a.prob_2,
+    tpa: (a, b) => b.tpa_pj - a.tpa_pj,
+    abc: (a, b) => a.equipo.localeCompare(b.equipo) || b.prob_2 - a.prob_2
+  };
+  L.sort(cmp[ord] || cmp.p2);
+
+  const n = L.length;
+  const avgP2 = n ? (L.reduce((s, d) => s + d.prob_2, 0) / n).toFixed(1) : '0.0';
+  const avgP3 = n ? (L.reduce((s, d) => s + d.prob_3, 0) / n).toFixed(1) : '0.0';
+  const maxT = n ? Math.max(...L.map(d => d.max_3pm)) : 0;
+
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><div style="font-size:11px;color:#94a3b8">JUGADORES EN VISTA</div><div class="kv">${n}</div></div>
+    <div class="kpi"><div style="font-size:11px;color:#94a3b8">PROB. PROMEDIO 2+ TRIPLES</div><div class="kv">${avgP2}%</div></div>
+    <div class="kpi"><div style="font-size:11px;color:#94a3b8">PROB. PROMEDIO 3+ TRIPLES</div><div class="kv">${avgP3}%</div></div>
+    <div class="kpi"><div style="font-size:11px;color:#94a3b8">MAXIMO EN UN JUEGO</div><div class="kv">${maxT}</div></div>`;
+
+  const tb = document.getElementById('tb');
+  tb.innerHTML = '';
+  L.forEach(d => {
+    const lv = getLiveJugador(d.jugador);
+    const chips = Object.entries(d.freq).map(([k, v]) => `<span class="chip" style="border-color:${d.color_prim}66"><strong style="color:${d.color_sec}">${k}T:</strong> ${v}</span>`).join('');
+    const tr = document.createElement('tr');
+    tr.onclick = () => abrirModalJugador(d);
+    tr.innerHTML = `
+      <td><span class="tpill" style="background:linear-gradient(135deg,${d.color_prim},#0f172a 140%)"><span class="dot" style="background:${d.color_sec}"></span>${d.equipo}</span></td>
+      <td><div class="pcell"><img class="ava" src="${d.foto}" style="border:2px solid ${d.color_prim}" onerror="this.style.display='none'"><div>
+        <strong>${d.jugador}</strong>
+        ${d.juega_hoy ? '<span class="today-dot">HOY</span>' : ''}
+        ${badgeLiveHtml(lv)}
+        <div style="font-size:11px;color:#94a3b8">${d.equipo_nombre} · Ult. PJ: ${d.ultimo_partido}</div>
+      </div></div></td>
+      <td>${d.pj_str} <span style="color:#94a3b8">(${d.pct_pj}%)</span></td>
+      <td>${d.tpa_pj.toFixed(1)}</td>
+      <td>${d.tpm_pj.toFixed(1)}</td>
+      <td><strong>${d.prob_1}%</strong></td>
+      <td><strong>${d.prob_2}%</strong></td>
+      <td><strong>${d.prob_3}%</strong></td>
+      <td><span class="mpill" style="background:${d.color_prim};border:1px solid ${d.color_sec}">${d.max_3pm}</span></td>
+      <td><div class="chips">${chips}</div></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+async function cargarLiveAlRefrescar() {
+  try {
+    const resp = await fetch('nba_live.json?v=' + Date.now(), { cache: 'no-store' });
+    if (!resp.ok) return;
+    const j = await resp.json();
+    LIVE_MAP = j.jugadores_live || {};
+    LIVE_PARTIDOS = j.partidos || [];
+    LIVE_ACTUALIZADO = j.actualizado_en || '';
+    const activos = LIVE_PARTIDOS.filter(p => p.es_live).length;
+    const hdr = document.getElementById('liveBadgeHeader');
+    if (hdr) {
+      hdr.innerHTML = activos > 0
+        ? `<span class="live-badge" style="margin-left:0;margin-right:5px">LIVE</span>${activos} en juego · Sync: ${LIVE_ACTUALIZADO}`
+        : `Live sync: ${LIVE_ACTUALIZADO || 'sin juegos activos'}`;
+    }
+    render();
+  } catch (e) {
+    // Si se abre por file:// sin servidor local, permanece en modo estatico
+  }
+}
+
+renderSlate();
+render();
+cargarLiveAlRefrescar();
+</script></body></html>
