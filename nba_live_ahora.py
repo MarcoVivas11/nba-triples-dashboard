@@ -14,6 +14,10 @@ PUNTOS_FILE = "nba_puntos.json"
 TRIPLES_FILE = "nba_triples.json"
 LIVE_FILE = "nba_live.json"
 
+ESPN_NBA_STATS_URL = (
+    "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/statistics/byathlete"
+    "?region=us&lang=en&contentorigin=espn&limit=500&page=1&season=2027&seasontype=2"
+)
 BREF_PER_GAME_URL = "https://www.basketball-reference.com/leagues/NBA_2027_per_game.html"
 BREF_STANDINGS_URL = "https://www.basketball-reference.com/leagues/NBA_2027.html"
 
@@ -53,7 +57,7 @@ TEAM_COLORS = {
     "WAS": ("#002B5C", "#E31837", "Washington Wizards"),
 }
 
-BREF_TO_NBA = {"BRK": "BKN", "CHO": "CHA", "PHO": "PHX"}
+BREF_TO_NBA = {"BRK": "BKN", "CHO": "CHA", "PHO": "PHX", "WSH": "WAS", "NO": "NOP", "GS": "GSW", "NY": "NYK", "SA": "SAS", "UTAH": "UTA"}
 
 NAME_TO_TEAM = {
     "Atlanta Hawks": "ATL", "Boston Celtics": "BOS", "Brooklyn Nets": "BKN",
@@ -90,32 +94,160 @@ def cargar_json_seguro(ruta, por_defecto):
         return json.loads(json.dumps(por_defecto))
 
 
-def obtener_team_games_publico(actual):
-    team_pj_map = dict(actual or {})
+def construir_fila_elegible(pid, nombre, eq, pj, tpj, fg_pct, ppg, max_pts, fecha_txt, equipos_hoy):
+    pct_pj = round((pj / tpj) * 100.0, 1) if tpj > 0 else 0.0
+    if pct_pj < 80.0 or fg_pct <= 40.0 or ppg < 14.0:
+        return None
+
+    if ppg >= 25.0:
+        p_alto, p_medio = 62.0, 28.0
+    elif ppg >= 20.0:
+        p_alto, p_medio = 34.0, 48.0
+    else:
+        p_alto, p_medio = 18.0, 54.0
+    p_bajo = round(max(0.0, 100.0 - p_alto - p_medio), 1)
+    p_medio, p_alto = round(p_medio, 1), round(p_alto, 1)
+    c_bajo = int(round((p_bajo / 100.0) * pj))
+    c_medio = int(round((p_medio / 100.0) * pj))
+    c_alto = max(0, pj - c_bajo - c_medio)
+
+    cp, cs, en = TEAM_COLORS.get(eq, ("#38bdf8", "#94a3b8", eq))
+    return {
+        "player_id": int(pid),
+        "foto": f"https://cdn.nba.com/headshots/nba/latest/1040x760/{int(pid)}.png",
+        "jugador": nombre,
+        "equipo": eq,
+        "equipo_nombre": en,
+        "color_prim": cp,
+        "color_sec": cs,
+        "juega_hoy": eq in set(equipos_hoy),
+        "pj": pj,
+        "team_pj": tpj,
+        "pj_str": f"{pj}/{tpj}",
+        "pct_pj": pct_pj,
+        "fg_pct": round(fg_pct, 1),
+        "ppg": round(ppg, 1),
+        "max_pts": int(max_pts),
+        "ultimo_partido": fecha_txt,
+        "intervalos": {
+            "0-14": {"juegos": c_bajo, "pct": p_bajo},
+            "15-24": {"juegos": c_medio, "pct": p_medio},
+            "25+": {"juegos": c_alto, "pct": p_alto},
+        },
+    }
+
+
+def poblar_desde_espn(base):
     try:
-        st_resp = requests.get(BREF_STANDINGS_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
-        if st_resp.status_code == 200:
-            for m_name, tri in NAME_TO_TEAM.items():
-                pat = rf'href="/teams/{re.escape(tri)}/2027\.html"[^>]*>{re.escape(m_name)}</a>.*?</td\s*>\s*<td[^>]*>(\d+)</td>\s*<td[^>]*>(\d+)</td>'
-                mt = re.search(pat, st_resp.text, flags=re.S)
-                if mt:
-                    team_pj_map[tri] = max(int(team_pj_map.get(tri, 0)), int(mt.group(1)) + int(mt.group(2)))
-    except Exception:
-        pass
-    return team_pj_map
+        resp = requests.get(
+            ESPN_NBA_STATS_URL,
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+            timeout=20,
+        )
+        if resp.status_code != 200:
+            print(f"Aviso ESPN status: {resp.status_code}")
+            return False
+        payload = resp.json()
+        athletes = payload.get("athletes") or []
+        if not athletes:
+            return False
+
+        team_pj_map = dict(base.get("team_games", {}))
+        jugadores = []
+        fecha_txt = datetime.now(TZ_LOCAL).strftime("%d/%m/%Y")
+        eq_hoy = base.get("equipos_hoy", [])
+
+        for item in athletes:
+            ath = item.get("athlete") or {}
+            pid_raw = ath.get("id")
+            nombre = str(ath.get("displayName") or "").strip()
+            team_obj = ath.get("team") or item.get("team") or {}
+            eq = normalizar_equipo(team_obj.get("abbreviation") or "")
+            if not pid_raw or not nombre or not eq or eq not in TEAM_COLORS:
+                continue
+
+            flat_map = {}
+            names = item.get("names") or payload.get("names") or []
+            vals = item.get("values") or []
+            for idx_n, n_val in enumerate(names):
+                if idx_n < len(vals):
+                    flat_map[str(n_val).lower()] = vals[idx_n]
+
+            for cat in (item.get("categories") or []):
+                c_names = cat.get("names") or []
+                c_vals = cat.get("values") or []
+                for idx_c, c_name in enumerate(c_names):
+                    if idx_c < len(c_vals):
+                        flat_map[str(c_name).lower()] = c_vals[idx_c]
+
+            pj = int(float(flat_map.get("gp", flat_map.get("gamesplayed", 0)) or 0))
+            ppg = float(flat_map.get("avgpoints", flat_map.get("pts", 0)) or 0.0)
+            fg_raw = float(flat_map.get("fieldgoalpct", flat_map.get("fg%", 0)) or 0.0)
+            fg_pct = round(fg_raw * 100.0 if 0 < fg_raw <= 1.0 else fg_raw, 1)
+
+            if pj <= 0:
+                continue
+
+            tpj = max(int(team_pj_map.get(eq, pj)), pj)
+            team_pj_map[eq] = tpj
+
+            fila = construir_fila_elegible(
+                pid=pid_raw,
+                nombre=nombre,
+                eq=eq,
+                pj=pj,
+                tpj=tpj,
+                fg_pct=fg_pct,
+                ppg=ppg,
+                max_pts=round(ppg * 1.45),
+                fecha_txt=fecha_txt,
+                equipos_hoy=eq_hoy,
+            )
+            if fila:
+                jugadores.append(fila)
+
+        if jugadores:
+            jugadores.sort(key=lambda x: (-x["ppg"], x["jugador"]))
+            base["team_games"] = team_pj_map
+            base["jugadores"] = jugadores
+            base["corte"] = fecha_txt
+            print(f"Base de puntos poblada desde ESPN: {len(jugadores)} jugadores")
+            return True
+    except Exception as e:
+        print(f"Aviso cargando base desde ESPN: {e}")
+    return False
 
 
 def poblar_base_puntos_si_vacia(base):
     if base.get("jugadores"):
         return False
+
+    if poblar_desde_espn(base):
+        return True
+
     try:
         resp = requests.get(BREF_PER_GAME_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
         if resp.status_code != 200:
             return False
-        team_pj_map = obtener_team_games_publico(base.get("team_games", {}))
-        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', resp.text, flags=re.S)
+        html_limpio = re.sub(r"<!--|-->", "", resp.text)
+        team_pj_map = dict(base.get("team_games", {}))
+        try:
+            st_resp = requests.get(BREF_STANDINGS_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+            if st_resp.status_code == 200:
+                st_limpio = re.sub(r"<!--|-->", "", st_resp.text)
+                for m_name, tri in NAME_TO_TEAM.items():
+                    pat = rf'href="/teams/{re.escape(tri)}/2027\.html"[^>]*>{re.escape(m_name)}</a>.*?</td\s*>\s*<td[^>]*>(\d+)</td>\s*<td[^>]*>(\d+)</td>'
+                    mt = re.search(pat, st_limpio, flags=re.S)
+                    if mt:
+                        team_pj_map[tri] = max(int(team_pj_map.get(tri, 0)), int(mt.group(1)) + int(mt.group(2)))
+        except Exception:
+            pass
+
+        rows = re.findall(r"<tr[^>]*>(.*?)</tr>", html_limpio, flags=re.S)
         jugadores = []
         idx_fb = 900000
+        fecha_txt = datetime.now(TZ_LOCAL).strftime("%d/%m/%Y")
+        eq_hoy = base.get("equipos_hoy", [])
 
         for r in rows:
             if 'data-stat="player"' not in r or 'data-stat="pts_per_g"' not in r:
@@ -139,54 +271,28 @@ def poblar_base_puntos_si_vacia(base):
             fg_pct = round(float(fg_raw) * 100.0 if fg_raw and float(fg_raw) <= 1.0 else (float(fg_raw) if fg_raw else 0.0), 1)
             tpj = max(int(team_pj_map.get(eq, pj)), pj)
             team_pj_map[eq] = tpj
-            pct_pj = round((pj / tpj) * 100.0, 1) if tpj > 0 else 0.0
-
-            if pct_pj < 80.0 or fg_pct <= 40.0 or ppg < 14.0:
-                continue
-
-            if ppg >= 25.0:
-                p_alto, p_medio = 62.0, 28.0
-            elif ppg >= 20.0:
-                p_alto, p_medio = 34.0, 48.0
-            else:
-                p_alto, p_medio = 18.0, 54.0
-            p_bajo = round(max(0.0, 100.0 - p_alto - p_medio), 1)
-            p_medio, p_alto = round(p_medio, 1), round(p_alto, 1)
-            c_bajo = int(round((p_bajo / 100.0) * pj))
-            c_medio = int(round((p_medio / 100.0) * pj))
-            c_alto = max(0, pj - c_bajo - c_medio)
 
             idx_fb += 1
-            cp, cs, en = TEAM_COLORS.get(eq, ("#38bdf8", "#94a3b8", eq))
-            jugadores.append({
-                "player_id": idx_fb,
-                "foto": f"https://cdn.nba.com/headshots/nba/latest/1040x760/{idx_fb}.png",
-                "jugador": nombre,
-                "equipo": eq,
-                "equipo_nombre": en,
-                "color_prim": cp,
-                "color_sec": cs,
-                "juega_hoy": False,
-                "pj": pj,
-                "team_pj": tpj,
-                "pj_str": f"{pj}/{tpj}",
-                "pct_pj": pct_pj,
-                "fg_pct": fg_pct,
-                "ppg": round(ppg, 1),
-                "max_pts": int(round(ppg * 1.45)),
-                "ultimo_partido": datetime.now(TZ_LOCAL).strftime("%d/%m/%Y"),
-                "intervalos": {
-                    "0-14": {"juegos": c_bajo, "pct": p_bajo},
-                    "15-24": {"juegos": c_medio, "pct": p_medio},
-                    "25+": {"juegos": c_alto, "pct": p_alto},
-                },
-            })
+            fila = construir_fila_elegible(
+                pid=idx_fb,
+                nombre=nombre,
+                eq=eq,
+                pj=pj,
+                tpj=tpj,
+                fg_pct=fg_pct,
+                ppg=ppg,
+                max_pts=round(ppg * 1.45),
+                fecha_txt=fecha_txt,
+                equipos_hoy=eq_hoy,
+            )
+            if fila:
+                jugadores.append(fila)
 
         if jugadores:
             jugadores.sort(key=lambda x: (-x["ppg"], x["jugador"]))
             base["team_games"] = team_pj_map
             base["jugadores"] = jugadores
-            base["corte"] = datetime.now(TZ_LOCAL).strftime("%d/%m/%Y")
+            base["corte"] = fecha_txt
             return True
     except Exception as e:
         print(f"Aviso cargando base de puntos: {e}")
