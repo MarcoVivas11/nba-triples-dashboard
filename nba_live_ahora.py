@@ -5,22 +5,11 @@ import time
 from zoneinfo import ZoneInfo
 
 from nba_api.live.nba.endpoints import boxscore, scoreboard
-from nba_api.stats.endpoints import leaguegamelog
 
 TZ_LOCAL = ZoneInfo("America/Caracas")
 SEASON = "2026-27"
 PUNTOS_FILE = "nba_puntos.json"
 LIVE_FILE = "nba_live.json"
-
-NBA_HEADERS = {
-    "Host": "stats.nba.com",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.nba.com/",
-    "Origin": "https://www.nba.com",
-    "Connection": "keep-alive",
-}
 
 TEAM_COLORS = {
     "ATL": ("#E03A3E", "#C1D32F", "Atlanta Hawks"),
@@ -56,18 +45,112 @@ TEAM_COLORS = {
 }
 
 
-def obtener_vivo():
+def cargar_base_puntos():
+    if not os.path.exists(PUNTOS_FILE):
+        return {
+            "season": SEASON,
+            "corte": "",
+            "fecha_hoy": datetime.now(TZ_LOCAL).strftime("%d/%m/%Y"),
+            "fecha_generacion": datetime.now(TZ_LOCAL).strftime("%Y-%m-%d"),
+            "generado": datetime.now(TZ_LOCAL).strftime("%d/%m/%Y %I:%M %p"),
+            "equipos_hoy": [],
+            "partidos_hoy": [],
+            "games_procesados": [],
+            "team_games": {},
+            "historial_jugadores": {},
+            "jugadores": [],
+        }
+    with open(PUNTOS_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    data.setdefault("games_procesados", [])
+    data.setdefault("team_games", {})
+    data.setdefault("historial_jugadores", {})
+    data.setdefault("jugadores", [])
+    return data
+
+
+def recalcular_jugadores_desde_historial(base, equipos_hoy):
+    team_games = base.get("team_games", {})
+    historial = base.get("historial_jugadores", {})
+    elegibles = []
+
+    for pid_str, info in historial.items():
+        pid = int(pid_str)
+        eq = info.get("equipo", "")
+        juegos = info.get("juegos", [])
+        if not eq or not juegos:
+            continue
+
+        tpj = int(team_games.get(eq, len(juegos)))
+        pj = len(juegos)
+        if tpj <= 0 or pj <= 0:
+            continue
+
+        pct_pj = round((pj / tpj) * 100.0, 1)
+        if pct_pj < 80.0:
+            continue
+
+        pts_list = [int(x.get("pts", 0)) for x in juegos]
+        fgm_total = sum(float(x.get("fgm", 0)) for x in juegos)
+        fga_total = sum(float(x.get("fga", 0)) for x in juegos)
+        fg_pct = round((fgm_total / fga_total) * 100.0, 1) if fga_total > 0 else 0.0
+        if fg_pct <= 40.0:
+            continue
+
+        ppg = round(sum(pts_list) / pj, 1)
+        if ppg < 14.0:
+            continue
+
+        c_bajo = sum(1 for p in pts_list if p <= 14)
+        c_medio = sum(1 for p in pts_list if 15 <= p <= 24)
+        c_alto = sum(1 for p in pts_list if p >= 25)
+
+        cp, cs, en = TEAM_COLORS.get(eq, ("#38bdf8", "#94a3b8", eq))
+        elegibles.append({
+            "player_id": pid,
+            "foto": f"https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png",
+            "jugador": info.get("jugador", ""),
+            "equipo": eq,
+            "equipo_nombre": en,
+            "color_prim": cp,
+            "color_sec": cs,
+            "juega_hoy": eq in set(equipos_hoy),
+            "pj": pj,
+            "team_pj": tpj,
+            "pj_str": f"{pj}/{tpj}",
+            "pct_pj": pct_pj,
+            "fg_pct": fg_pct,
+            "ppg": ppg,
+            "max_pts": max(pts_list),
+            "ultimo_partido": info.get("ultimo_partido", ""),
+            "intervalos": {
+                "0-14": {"juegos": c_bajo, "pct": round((c_bajo / pj) * 100.0, 1)},
+                "15-24": {"juegos": c_medio, "pct": round((c_medio / pj) * 100.0, 1)},
+                "25+": {"juegos": c_alto, "pct": round((c_alto / pj) * 100.0, 1)},
+            },
+        })
+
+    elegibles.sort(key=lambda x: (-x["ppg"], x["jugador"]))
+    return elegibles
+
+
+def obtener_vivo_y_acumular_puntos():
     vivo_jugadores = {}
     partidos_estado = []
     equipos_hoy = set()
     partidos_hoy = []
+    base = cargar_base_puntos()
+    games_vistos = set(base.get("games_procesados", []))
+    historial = base.get("historial_jugadores", {})
+    team_games = base.get("team_games", {})
+    hubo_cambios_pts = False
 
     try:
         sb = scoreboard.ScoreBoard()
         data = sb.get_dict()
         games = data.get("scoreboard", {}).get("games", [])
         for g in games:
-            gid = g.get("gameId")
+            gid = str(g.get("gameId") or "")
             status_text = str(g.get("gameStatusText", "")).strip()
             game_status = g.get("gameStatus")
             es_live = (game_status == 2) or (
@@ -94,14 +177,18 @@ def obtener_vivo():
             if gid and game_status in (2, 3):
                 try:
                     bs = boxscore.BoxScore(game_id=gid).get_dict().get("game", {})
-                    for side in ("homeTeam", "awayTeam"):
+                    for side, tri in (("homeTeam", home), ("awayTeam", away)):
                         for p in bs.get(side, {}).get("players", []):
                             nombre = p.get("name", "")
+                            pid = p.get("personId")
                             st = p.get("statistics", {})
                             tpm = st.get("threePointersMade", 0)
                             tpa = st.get("threePointersAttempted", 0)
-                            pts = st.get("points", 0)
+                            pts = int(st.get("points", 0) or 0)
+                            fgm = int(st.get("fieldGoalsMade", 0) or 0)
+                            fga = int(st.get("fieldGoalsAttempted", 0) or 0)
                             mins = st.get("minutesCalculated", "")
+
                             if nombre:
                                 vivo_jugadores[nombre.lower()] = {
                                     "es_live": es_live,
@@ -111,177 +198,69 @@ def obtener_vivo():
                                     "pts_live": pts,
                                     "min_live": mins,
                                 }
+
+                            if game_status == 3 and gid not in games_vistos and pid and mins not in ("", "PT00M00.00S"):
+                                p_key = str(pid)
+                                entry = historial.setdefault(p_key, {
+                                    "jugador": nombre,
+                                    "equipo": tri,
+                                    "ultimo_partido": datetime.now(TZ_LOCAL).strftime("%d/%m/%Y"),
+                                    "juegos": [],
+                                })
+                                entry["jugador"] = nombre
+                                entry["equipo"] = tri
+                                entry["ultimo_partido"] = datetime.now(TZ_LOCAL).strftime("%d/%m/%Y")
+                                if not any(j.get("game_id") == gid for j in entry["juegos"]):
+                                    entry["juegos"].append({
+                                        "game_id": gid,
+                                        "pts": pts,
+                                        "fgm": fgm,
+                                        "fga": fga,
+                                    })
+                                    hubo_cambios_pts = True
+
+                    if game_status == 3 and gid not in games_vistos:
+                        for tri in (away, home):
+                            if tri:
+                                team_games[tri] = int(team_games.get(tri, 0)) + 1
+                        games_vistos.add(gid)
+                        hubo_cambios_pts = True
+
                     time.sleep(0.3)
                 except Exception:
                     pass
     except Exception as e:
         print(f"Aviso en vivo: {e}")
 
-    return {
-        "actualizado_en": datetime.now(TZ_LOCAL).strftime("%d/%m/%Y %I:%M:%S %p"),
+    ahora = datetime.now(TZ_LOCAL)
+    live_payload = {
+        "actualizado_en": ahora.strftime("%d/%m/%Y %I:%M:%S %p"),
         "equipos_hoy": sorted(equipos_hoy),
         "partidos_hoy": partidos_hoy,
         "partidos": partidos_estado,
         "jugadores_live": vivo_jugadores,
     }
 
+    if hubo_cambios_pts or not os.path.exists(PUNTOS_FILE):
+        base["games_procesados"] = sorted(games_vistos)
+        base["team_games"] = team_games
+        base["historial_jugadores"] = historial
+        base["equipos_hoy"] = sorted(equipos_hoy)
+        base["partidos_hoy"] = partidos_hoy
+        base["fecha_hoy"] = ahora.strftime("%d/%m/%Y")
+        base["fecha_generacion"] = ahora.strftime("%Y-%m-%d")
+        base["generado"] = ahora.strftime("%d/%m/%Y %I:%M %p")
+        base["jugadores"] = recalcular_jugadores_desde_historial(base, sorted(equipos_hoy))
+        with open(PUNTOS_FILE, "w", encoding="utf-8") as f:
+            json.dump(base, f, ensure_ascii=False)
+        print(f"Puntos por jugador actualizados en nube: {len(base['jugadores'])} elegibles")
 
-def necesita_actualizar_puntos():
-    if not os.path.exists(PUNTOS_FILE):
-        return True
-    if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch":
-        return True
-    try:
-        with open(PUNTOS_FILE, "r", encoding="utf-8") as f:
-            prev = json.load(f)
-        if not prev.get("jugadores"):
-            return True
-        fecha_prev = prev.get("fecha_generacion", "")
-        hoy_str = datetime.now(TZ_LOCAL).strftime("%Y-%m-%d")
-        return fecha_prev != hoy_str
-    except Exception:
-        return True
-
-
-def fetch_gamelog_con_reintentos(abbr, intentos=3):
-    ultimo_err = None
-    for i in range(1, intentos + 1):
-        try:
-            lg = leaguegamelog.LeagueGameLog(
-                season=SEASON,
-                season_type_all_star="Regular Season",
-                player_or_team_abbreviation=abbr,
-                headers=NBA_HEADERS,
-                timeout=35,
-            )
-            df = lg.get_data_frames()[0]
-            if df is not None and not df.empty:
-                return df
-        except Exception as e:
-            ultimo_err = e
-            print(f"Reintento {i}/{intentos} LeagueGameLog({abbr}) tras error: {e}")
-            time.sleep(2 * i)
-    raise RuntimeError(f"No se pudo obtener LeagueGameLog({abbr}): {ultimo_err}")
-
-
-def generar_puntos_jugadores(equipos_hoy, partidos_hoy):
-    team_df = fetch_gamelog_con_reintentos("T")
-    time.sleep(1.0)
-    player_df = fetch_gamelog_con_reintentos("P")
-
-    print(f"Filas team_df: {len(team_df)} | Filas player_df: {len(player_df)}")
-
-    team_games_count = team_df.groupby("TEAM_ABBREVIATION")["GAME_ID"].nunique().to_dict()
-    corte_str = ""
-    if "GAME_DATE" in player_df.columns and not player_df["GAME_DATE"].empty:
-        fechas_dt = player_df["GAME_DATE"].astype(str).str[:10]
-        max_f = fechas_dt.max()
-        try:
-            corte_str = datetime.strptime(max_f, "%Y-%m-%d").strftime("%d/%m/%Y")
-        except Exception:
-            corte_str = max_f
-
-    jugadores_elegibles = []
-    for (pid, pname, team_abbr), grp in player_df.groupby(
-        ["PLAYER_ID", "PLAYER_NAME", "TEAM_ABBREVIATION"], dropna=False
-    ):
-        team_games = int(team_games_count.get(team_abbr, 0))
-        pj = int(grp["GAME_ID"].nunique())
-        if team_games <= 0 or pj <= 0:
-            continue
-
-        pct_pj = round((pj / team_games) * 100.0, 1)
-        if pct_pj < 80.0:
-            continue
-
-        pts_series = grp["PTS"].fillna(0).astype(int)
-        fgm_total = float(grp["FGM"].fillna(0).sum()) if "FGM" in grp.columns else 0.0
-        fga_total = float(grp["FGA"].fillna(0).sum()) if "FGA" in grp.columns else 0.0
-        fg_pct = round((fgm_total / fga_total) * 100.0, 1) if fga_total > 0 else 0.0
-        if fg_pct <= 40.0:
-            continue
-
-        ppg = round(float(pts_series.mean()), 1)
-        if ppg < 14.0:
-            continue
-
-        c_bajo = int((pts_series <= 14).sum())
-        c_medio = int(((pts_series >= 15) & (pts_series <= 24)).sum())
-        c_alto = int((pts_series >= 25).sum())
-
-        p_bajo = round((c_bajo / pj) * 100.0, 1)
-        p_medio = round((c_medio / pj) * 100.0, 1)
-        p_alto = round((c_alto / pj) * 100.0, 1)
-
-        ult_fecha = ""
-        if "GAME_DATE" in grp.columns and not grp["GAME_DATE"].empty:
-            ult_raw = str(grp.sort_values("GAME_DATE").iloc[-1]["GAME_DATE"])[:10]
-            try:
-                ult_fecha = datetime.strptime(ult_raw, "%Y-%m-%d").strftime("%d/%m/%Y")
-            except Exception:
-                ult_fecha = ult_raw
-
-        c_prim, c_sec, team_name = TEAM_COLORS.get(
-            team_abbr, ("#38bdf8", "#94a3b8", team_abbr)
-        )
-
-        jugadores_elegibles.append({
-            "player_id": int(pid),
-            "foto": f"https://cdn.nba.com/headshots/nba/latest/1040x760/{int(pid)}.png",
-            "jugador": str(pname),
-            "equipo": str(team_abbr),
-            "equipo_nombre": team_name,
-            "color_prim": c_prim,
-            "color_sec": c_sec,
-            "juega_hoy": str(team_abbr) in set(equipos_hoy),
-            "pj": pj,
-            "team_pj": team_games,
-            "pj_str": f"{pj}/{team_games}",
-            "pct_pj": pct_pj,
-            "fg_pct": fg_pct,
-            "ppg": ppg,
-            "max_pts": int(pts_series.max()),
-            "ultimo_partido": ult_fecha,
-            "intervalos": {
-                "0-14": {"juegos": c_bajo, "pct": p_bajo},
-                "15-24": {"juegos": c_medio, "pct": p_medio},
-                "25+": {"juegos": c_alto, "pct": p_alto},
-            },
-        })
-
-    jugadores_elegibles.sort(key=lambda x: (-x["ppg"], x["jugador"]))
-    ahora = datetime.now(TZ_LOCAL)
-
-    return {
-        "season": SEASON,
-        "corte": corte_str,
-        "fecha_hoy": ahora.strftime("%d/%m/%Y"),
-        "fecha_generacion": ahora.strftime("%Y-%m-%d"),
-        "generado": ahora.strftime("%d/%m/%Y %I:%M %p"),
-        "criterios": {
-            "min_pct_pj": 80.0,
-            "min_fg_pct": 40.0,
-            "min_ppg": 14.0,
-            "rangos": ["0-14", "15-24", "25+"],
-        },
-        "equipos_hoy": equipos_hoy,
-        "partidos_hoy": partidos_hoy,
-        "jugadores": jugadores_elegibles,
-    }
+    return live_payload
 
 
 if __name__ == "__main__":
-    live_payload = obtener_vivo()
+    live_payload = obtener_vivo_y_acumular_puntos()
     with open(LIVE_FILE, "w", encoding="utf-8") as f:
         json.dump(live_payload, f, ensure_ascii=False)
     n_live = sum(1 for x in live_payload["partidos"] if x["es_live"])
     print(f"Live actualizado ({live_payload['actualizado_en']}) | Juegos en vivo: {n_live} | Partidos en scoreboard: {len(live_payload['partidos'])}")
-
-    if necesita_actualizar_puntos():
-        pts_payload = generar_puntos_jugadores(
-            live_payload.get("equipos_hoy", []),
-            live_payload.get("partidos_hoy", []),
-        )
-        with open(PUNTOS_FILE, "w", encoding="utf-8") as f:
-            json.dump(pts_payload, f, ensure_ascii=False)
-        print(f"Puntos por jugador actualizados: {len(pts_payload['jugadores'])} elegibles")
