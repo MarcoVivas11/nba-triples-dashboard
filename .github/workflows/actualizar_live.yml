@@ -24,13 +24,14 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Consultar partidos en vivo
+      - name: Consultar partidos en vivo y puntos
         run: python nba_live_ahora.py
 
-      - name: Guardar nba_live.json
+      - name: Guardar cambios en el repositorio
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add nba_live.json
+          if [ -f nba_puntos.json ]; then git add nba_puntos.json; fi
           git commit -m "Sync live NBA" || exit 0
           git push
