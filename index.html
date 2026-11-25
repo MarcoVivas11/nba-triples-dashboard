@@ -68,7 +68,7 @@ tr:hover td{background:rgba(56,189,248,.07);cursor:pointer}
 <h1 id="mainTitle" style="margin:0;font-size:21px">NBA 2026-27 - Jornada del Dia y Probabilidad de Triples (1T / 2T / 3T)</h1>
 <div id="mainSub" style="color:#94a3b8;font-size:13px;margin-top:4px">Base: >= 80% PJ del equipo y >= 5.0 3PA/J · Presiona F5 para leer lo ultimo en nba_live.json</div>
 <div class="badges">
-  <span class="bc" id="corteBadge">Fecha de corte oficial NBA: 23/11/2026</span>
+  <span class="bc" id="corteBadge">Corte puntos: esperando juegos finalizados</span>
   <span class="bh" id="hoyBadge">Jornada del dia: 24/11/2026</span>
   <span class="bg" id="genBadge">Generado: 24/11/2026 07:25 PM</span>
   <span class="blive-info" id="liveBadgeHeader">Live: esperando nba_live.json</span>
@@ -143,6 +143,32 @@ let LIVE_PARTIDOS = [];
 let LIVE_EQUIPOS_HOY = [];
 let LIVE_ACTUALIZADO = '';
 
+function actualizarBadgesFecha() {
+  const corteEl = document.getElementById('corteBadge');
+  const genEl = document.getElementById('genBadge');
+  const totalJuegosAcum = (PUNTOS_META && Array.isArray(PUNTOS_META.games_procesados))
+    ? PUNTOS_META.games_procesados.length
+    : 0;
+
+  if (corteEl) {
+    if (PUNTOS_META && PUNTOS_META.corte) {
+      corteEl.textContent = `Corte puntos NBA: ${PUNTOS_META.corte} (${totalJuegosAcum} PJ)`;
+    } else if (totalJuegosAcum > 0 && PUNTOS_META && PUNTOS_META.fecha_hoy) {
+      corteEl.textContent = `Corte puntos live: ${PUNTOS_META.fecha_hoy} (${totalJuegosAcum} PJ)`;
+    } else {
+      corteEl.textContent = 'Corte puntos: esperando juegos finalizados';
+    }
+  }
+
+  if (genEl) {
+    if (LIVE_ACTUALIZADO) {
+      genEl.textContent = `Sync live: ${LIVE_ACTUALIZADO}`;
+    } else if (PUNTOS_META && PUNTOS_META.generado) {
+      genEl.textContent = `Generado: ${PUNTOS_META.generado}`;
+    }
+  }
+}
+
 function getEquiposHoySet() {
   if (LIVE_ACTUALIZADO) {
     return new Set(LIVE_EQUIPOS_HOY);
@@ -198,6 +224,7 @@ function renderSlate() {
   if (hoyBadge && fechaLabel) {
     hoyBadge.textContent = `Jornada del dia: ${fechaLabel}`;
   }
+  actualizarBadgesFecha();
 
   const tieneLiveCargado = Boolean(LIVE_ACTUALIZADO);
   const listaPartidos = tieneLiveCargado
@@ -233,7 +260,12 @@ function poblarSelectorPuntos() {
 
   if (!filtrados.length) {
     sel.innerHTML = '<option value="">Sin jugadores con ese filtro</option>';
-    document.getElementById('ptsDetalleCard').innerHTML = '<div style="color:#94a3b8;font-size:13px">Aún no hay jugadores que cumplan el filtro acumulado en nba_puntos.json (se van sumando automáticamente al finalizar los partidos de la jornada).</div>';
+    const nGames = (PUNTOS_META && Array.isArray(PUNTOS_META.games_procesados)) ? PUNTOS_META.games_procesados.length : 0;
+    document.getElementById('ptsDetalleCard').innerHTML = `
+      <div style="color:#cbd5e1;font-size:13px;line-height:1.5">
+        <strong>Sin jugadores elegibles aun en nba_puntos.json</strong> (partidos acumulados desde live: <strong>${nGames}</strong>).<br>
+        <span style="color:#94a3b8;font-size:12px">Los jugadores aparecen automaticamente a medida que finalizan los partidos de la jornada y se acumulan sus boxscores en GitHub Actions (criterios: &ge;80% PJ, FG% &gt;40% y &ge;14.0 PPG).</span>
+      </div>`;
     return;
   }
 
@@ -390,13 +422,23 @@ function renderRecomendaciones(poolBase) {
   });
 }
 
-[...new Set(DATA.map(d => d.equipo))].sort().forEach(e => {
-  const info = DATA.find(x => x.equipo === e);
-  const o = document.createElement('option');
-  o.value = e;
-  o.textContent = e + ' - ' + (info ? info.equipo_nombre : e);
-  document.getElementById('eq').appendChild(o);
-});
+function poblarFiltroEquiposTriples() {
+  const selEq = document.getElementById('eq');
+  const prevEq = selEq.value;
+  selEq.innerHTML = '<option value="">Todos los equipos</option>';
+  [...new Set(DATA.map(d => d.equipo))].sort().forEach(e => {
+    const info = DATA.find(x => x.equipo === e);
+    const o = document.createElement('option');
+    o.value = e;
+    o.textContent = e + ' - ' + (info ? info.equipo_nombre : e);
+    selEq.appendChild(o);
+  });
+  if (prevEq && [...selEq.options].some(o => o.value === prevEq)) {
+    selEq.value = prevEq;
+  }
+}
+
+poblarFiltroEquiposTriples();
 
 function resetF() {
   if (RUBRO_ACTUAL === 'triples') {
@@ -477,12 +519,37 @@ function render() {
   });
 }
 
+async function cargarTriplesJson() {
+  try {
+    const resp = await fetch('nba_triples.json?v=' + Date.now(), { cache: 'no-store' });
+    if (!resp.ok) return;
+    const j = await resp.json();
+    if (Array.isArray(j.jugadores) && j.jugadores.length) {
+      DATA.length = 0;
+      j.jugadores.forEach(item => DATA.push(item));
+      if (j.corte) {
+        META.corte = j.corte;
+      }
+      poblarFiltroEquiposTriples();
+      if (!hayEquiposDeHoy()) {
+        document.getElementById('soloHoy').value = 'todos';
+      } else {
+        document.getElementById('soloHoy').value = 'hoy';
+      }
+      if (RUBRO_ACTUAL === 'triples') {
+        render();
+      }
+    }
+  } catch (e) {}
+}
+
 async function cargarPuntosJson() {
   try {
     const resp = await fetch('nba_puntos.json?v=' + Date.now(), { cache: 'no-store' });
     if (!resp.ok) return;
     PUNTOS_META = await resp.json();
     PUNTOS_DATA = PUNTOS_META.jugadores || [];
+    actualizarBadgesFecha();
     if (RUBRO_ACTUAL === 'puntos') {
       renderSlate();
       poblarSelectorPuntos();
@@ -500,6 +567,7 @@ async function cargarLiveAlRefrescar() {
     LIVE_PARTIDOS = j.partidos || [];
     LIVE_EQUIPOS_HOY = j.equipos_hoy || [];
     LIVE_ACTUALIZADO = j.actualizado_en || '';
+    actualizarBadgesFecha();
     const activos = LIVE_PARTIDOS.filter(p => p.es_live).length;
     const hdr = document.getElementById('liveBadgeHeader');
     if (hdr) {
@@ -526,4 +594,5 @@ renderSlate();
 render();
 cargarLiveAlRefrescar();
 cargarPuntosJson();
+cargarTriplesJson();
 </script></body></html>
