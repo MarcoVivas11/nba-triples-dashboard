@@ -161,6 +161,7 @@ function cambiarRubro(rubro) {
   } else {
     document.getElementById('mainTitle').textContent = 'NBA 2026-27 - Puntos por Jugador e Intervalos de Frecuencia';
     document.getElementById('mainSub').textContent = 'Filtro: >= 80% PJ del equipo, FG% > 40% y >= 14.0 PPG · Intervalos: 0–14, 15–24 y 25+ pts';
+    renderSlate();
     poblarSelectorPuntos();
     renderTablaPuntos();
   }
@@ -179,9 +180,20 @@ function badgeLiveHtml(info) {
 
 function renderSlate() {
   const box = document.getElementById('slateBox');
-  const fechaLabel = (RUBRO_ACTUAL === 'puntos' && PUNTOS_META && PUNTOS_META.fecha_hoy) ? PUNTOS_META.fecha_hoy : META.fecha_hoy;
-  const fallbackHoy = (RUBRO_ACTUAL === 'puntos' && PUNTOS_META && PUNTOS_META.partidos_hoy) ? PUNTOS_META.partidos_hoy : (META.partidos_hoy || []);
-  const listaPartidos = LIVE_PARTIDOS.length ? LIVE_PARTIDOS : fallbackHoy.map(m => ({ matchup: m, status_text: '', es_live: false }));
+  const fechaLive = LIVE_ACTUALIZADO ? LIVE_ACTUALIZADO.split(' ')[0] : '';
+  const fechaLabel = fechaLive || ((RUBRO_ACTUAL === 'puntos' && PUNTOS_META && PUNTOS_META.fecha_hoy) ? PUNTOS_META.fecha_hoy : META.fecha_hoy);
+  const hoyBadge = document.getElementById('hoyBadge');
+  if (hoyBadge && fechaLabel) {
+    hoyBadge.textContent = `Jornada del dia: ${fechaLabel}`;
+  }
+
+  const tieneLiveCargado = Boolean(LIVE_ACTUALIZADO);
+  const listaPartidos = tieneLiveCargado
+    ? LIVE_PARTIDOS
+    : ((RUBRO_ACTUAL === 'puntos' && PUNTOS_META && PUNTOS_META.partidos_hoy)
+        ? PUNTOS_META.partidos_hoy.map(m => ({ matchup: m, status_text: '', es_live: false }))
+        : (META.partidos_hoy || []).map(m => ({ matchup: m, status_text: '', es_live: false })));
+
   if (listaPartidos.length) {
     box.innerHTML = `<div class="slate-title">Partidos del dia (${fechaLabel}) — ${listaPartidos.length} encuentros</div>
       <div class="match-list">${listaPartidos.map(m => {
@@ -192,7 +204,7 @@ function renderSlate() {
       }).join('')}</div>`;
   } else {
     box.innerHTML = `<div class="slate-title">Jornada (${fechaLabel})</div>
-      <div style="font-size:12px;color:#94a3b8;">No se detectaron encuentros en el calendario del dia o el servidor aun no publica la cartelera.</div>`;
+      <div style="font-size:12px;color:#94a3b8;">Sin encuentros programados en el scoreboard para ${fechaLabel} o jornada aún no iniciada.</div>`;
   }
 }
 
