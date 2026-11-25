@@ -12,6 +12,16 @@ SEASON = "2026-27"
 PUNTOS_FILE = "nba_puntos.json"
 LIVE_FILE = "nba_live.json"
 
+NBA_HEADERS = {
+    "Host": "stats.nba.com",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.nba.com/",
+    "Origin": "https://www.nba.com",
+    "Connection": "keep-alive",
+}
+
 TEAM_COLORS = {
     "ATL": ("#E03A3E", "#C1D32F", "Atlanta Hawks"),
     "BOS": ("#007A33", "#BA9653", "Boston Celtics"),
@@ -59,7 +69,7 @@ def obtener_vivo():
         for g in games:
             gid = g.get("gameId")
             status_text = str(g.get("gameStatusText", "")).strip()
-            game_status = g.get("gameStatus")  # 1=previa, 2=en vivo, 3=finalizado
+            game_status = g.get("gameStatus")
             es_live = (game_status == 2) or (
                 "LIVE" in status_text.upper()
                 or ("Q" in status_text.upper() and "FINAL" not in status_text.upper())
@@ -124,6 +134,8 @@ def necesita_actualizar_puntos():
     try:
         with open(PUNTOS_FILE, "r", encoding="utf-8") as f:
             prev = json.load(f)
+        if not prev.get("jugadores"):
+            return True
         fecha_prev = prev.get("fecha_generacion", "")
         hoy_str = datetime.now(TZ_LOCAL).strftime("%Y-%m-%d")
         return fecha_prev != hoy_str
@@ -131,23 +143,33 @@ def necesita_actualizar_puntos():
         return True
 
 
+def fetch_gamelog_con_reintentos(abbr, intentos=3):
+    ultimo_err = None
+    for i in range(1, intentos + 1):
+        try:
+            lg = leaguegamelog.LeagueGameLog(
+                season=SEASON,
+                season_type_all_star="Regular Season",
+                player_or_team_abbreviation=abbr,
+                headers=NBA_HEADERS,
+                timeout=35,
+            )
+            df = lg.get_data_frames()[0]
+            if df is not None and not df.empty:
+                return df
+        except Exception as e:
+            ultimo_err = e
+            print(f"Reintento {i}/{intentos} LeagueGameLog({abbr}) tras error: {e}")
+            time.sleep(2 * i)
+    raise RuntimeError(f"No se pudo obtener LeagueGameLog({abbr}): {ultimo_err}")
+
+
 def generar_puntos_jugadores(equipos_hoy, partidos_hoy):
-    team_df = leaguegamelog.LeagueGameLog(
-        season=SEASON,
-        season_type_all_star="Regular Season",
-        player_or_team_abbreviation="T",
-    ).get_data_frames()[0]
+    team_df = fetch_gamelog_con_reintentos("T")
+    time.sleep(1.0)
+    player_df = fetch_gamelog_con_reintentos("P")
 
-    time.sleep(0.6)
-
-    player_df = leaguegamelog.LeagueGameLog(
-        season=SEASON,
-        season_type_all_star="Regular Season",
-        player_or_team_abbreviation="P",
-    ).get_data_frames()[0]
-
-    if team_df.empty or player_df.empty:
-        raise RuntimeError("LeagueGameLog devolvió tablas vacías")
+    print(f"Filas team_df: {len(team_df)} | Filas player_df: {len(player_df)}")
 
     team_games_count = team_df.groupby("TEAM_ABBREVIATION")["GAME_ID"].nunique().to_dict()
     corte_str = ""
@@ -253,16 +275,13 @@ if __name__ == "__main__":
     with open(LIVE_FILE, "w", encoding="utf-8") as f:
         json.dump(live_payload, f, ensure_ascii=False)
     n_live = sum(1 for x in live_payload["partidos"] if x["es_live"])
-    print(f"Live actualizado ({live_payload['actualizado_en']}) | Juegos en vivo: {n_live}")
+    print(f"Live actualizado ({live_payload['actualizado_en']}) | Juegos en vivo: {n_live} | Partidos en scoreboard: {len(live_payload['partidos'])}")
 
     if necesita_actualizar_puntos():
-        try:
-            pts_payload = generar_puntos_jugadores(
-                live_payload.get("equipos_hoy", []),
-                live_payload.get("partidos_hoy", []),
-            )
-            with open(PUNTOS_FILE, "w", encoding="utf-8") as f:
-                json.dump(pts_payload, f, ensure_ascii=False)
-            print(f"Puntos por jugador actualizados: {len(pts_payload['jugadores'])} elegibles")
-        except Exception as e:
-            print(f"Aviso puntos por jugador: {e}")
+        pts_payload = generar_puntos_jugadores(
+            live_payload.get("equipos_hoy", []),
+            live_payload.get("partidos_hoy", []),
+        )
+        with open(PUNTOS_FILE, "w", encoding="utf-8") as f:
+            json.dump(pts_payload, f, ensure_ascii=False)
+        print(f"Puntos por jugador actualizados: {len(pts_payload['jugadores'])} elegibles")
