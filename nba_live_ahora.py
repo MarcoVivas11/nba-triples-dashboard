@@ -13,26 +13,6 @@ PUNTOS_FILE = "nba_puntos.json"
 TRIPLES_FILE = "nba_triples.json"
 LIVE_FILE = "nba_live.json"
 
-ESPN_NBA_STATS_URL = (
-    "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/statistics/byathlete"
-    "?region=us&lang=en&contentorigin=espn&limit=500&page=1&season=2027&seasontype=2"
-)
-
-BASE_INICIAL_PUNTOS = [
-    (1628369, "Jayson Tatum", "BOS", 15, 17, 46.8, 26.4, 38),
-    (1629029, "Luka Dončić", "LAL", 16, 18, 47.2, 29.8, 42),
-    (1628983, "Shai Gilgeous-Alexander", "OKC", 17, 18, 51.4, 31.2, 44),
-    (1630595, "Cade Cunningham", "DET", 15, 16, 45.6, 24.1, 35),
-    (1628973, "Jalen Brunson", "NYK", 17, 17, 48.1, 25.3, 37),
-    (1630178, "Tyrese Maxey", "PHI", 17, 18, 44.8, 24.7, 36),
-    (1641705, "Victor Wembanyama", "SAS", 17, 18, 48.5, 23.6, 35),
-    (1627750, "Jamal Murray", "DEN", 15, 15, 46.2, 21.4, 32),
-    (1626164, "Devin Booker", "PHX", 16, 16, 45.9, 25.1, 36),
-    (203081, "Damian Lillard", "POR", 17, 17, 43.7, 22.8, 34),
-    (1630217, "Desmond Bane", "ORL", 15, 16, 46.5, 20.9, 31),
-    (1629639, "Tyler Herro", "MIL", 17, 18, 45.3, 22.1, 33),
-]
-
 TEAM_COLORS = {
     "ATL": ("#E03A3E", "#C1D32F", "Atlanta Hawks"),
     "BOS": ("#007A33", "#BA9653", "Boston Celtics"),
@@ -102,204 +82,6 @@ def cargar_json_seguro(ruta, por_defecto):
         return json.loads(json.dumps(por_defecto))
 
 
-def construir_fila_elegible(pid, nombre, eq, pj, tpj, fg_pct, ppg, max_pts, fecha_txt, equipos_hoy):
-    pct_pj = round((pj / tpj) * 100.0, 1) if tpj > 0 else 0.0
-    if pct_pj < 80.0 or fg_pct <= 40.0 or ppg < 14.0:
-        return None
-
-    if ppg >= 25.0:
-        p_alto, p_medio = 62.0, 28.0
-    elif ppg >= 20.0:
-        p_alto, p_medio = 34.0, 48.0
-    else:
-        p_alto, p_medio = 18.0, 54.0
-    p_bajo = round(max(0.0, 100.0 - p_alto - p_medio), 1)
-    p_medio, p_alto = round(p_medio, 1), round(p_alto, 1)
-    c_bajo = int(round((p_bajo / 100.0) * pj))
-    c_medio = int(round((p_medio / 100.0) * pj))
-    c_alto = max(0, pj - c_bajo - c_medio)
-
-    cp, cs, en = TEAM_COLORS.get(eq, ("#38bdf8", "#94a3b8", eq))
-    return {
-        "player_id": int(pid),
-        "foto": f"https://cdn.nba.com/headshots/nba/latest/1040x760/{int(pid)}.png",
-        "jugador": nombre,
-        "equipo": eq,
-        "equipo_nombre": en,
-        "color_prim": cp,
-        "color_sec": cs,
-        "juega_hoy": eq in set(equipos_hoy),
-        "pj": pj,
-        "team_pj": tpj,
-        "pj_str": f"{pj}/{tpj}",
-        "pct_pj": pct_pj,
-        "fg_pct": round(fg_pct, 1),
-        "ppg": round(ppg, 1),
-        "max_pts": int(max_pts),
-        "ultimo_partido": fecha_txt,
-        "intervalos": {
-            "0-14": {"juegos": c_bajo, "pct": p_bajo},
-            "15-24": {"juegos": c_medio, "pct": p_medio},
-            "25+": {"juegos": c_alto, "pct": p_alto},
-        },
-    }
-
-
-def sembrar_historial_jugador(historial, fila, fecha_txt):
-    pid = fila["player_id"]
-    pj = fila["pj"]
-    fg_pct = fila["fg_pct"]
-    ppg = fila["ppg"]
-    max_pts = fila["max_pts"]
-    ints = fila["intervalos"]
-
-    fga_est = pj * 16
-    fgm_est = round(fga_est * (fg_pct / 100.0))
-
-    historial[str(pid)] = {
-        "jugador": fila["jugador"],
-        "equipo": fila["equipo"],
-        "ultimo_partido": fecha_txt,
-        "base_pj": pj,
-        "base_pts": round(ppg * pj),
-        "base_fgm": fgm_est,
-        "base_fga": fga_est,
-        "base_max_pts": max_pts,
-        "base_intervalos": {
-            "0-14": ints["0-14"]["juegos"],
-            "15-24": ints["15-24"]["juegos"],
-            "25+": ints["25+"]["juegos"],
-        },
-        "juegos": [],
-    }
-
-
-def poblar_desde_espn(base):
-    try:
-        resp = requests.get(
-            ESPN_NBA_STATS_URL,
-            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
-            timeout=20,
-        )
-        if resp.status_code != 200:
-            print(f"Aviso ESPN status: {resp.status_code}")
-            return False
-        payload = resp.json()
-        athletes = payload.get("athletes") or []
-        if not athletes:
-            return False
-
-        team_pj_map = dict(base.get("team_games", {}))
-        historial = base.setdefault("historial_jugadores", {})
-        jugadores = []
-        fecha_txt = datetime.now(TZ_LOCAL).strftime("%d/%m/%Y")
-        eq_hoy = base.get("equipos_hoy", [])
-
-        for item in athletes:
-            ath = item.get("athlete") or {}
-            pid_raw = ath.get("id")
-            nombre = str(ath.get("displayName") or "").strip()
-            team_obj = ath.get("team") or item.get("team") or {}
-            eq = normalizar_equipo(team_obj.get("abbreviation") or "")
-            if not pid_raw or not nombre or not eq or eq not in TEAM_COLORS:
-                continue
-
-            flat_map = {}
-            names = item.get("names") or payload.get("names") or []
-            vals = item.get("values") or []
-            for idx_n, n_val in enumerate(names):
-                if idx_n < len(vals):
-                    flat_map[str(n_val).lower()] = vals[idx_n]
-
-            for cat in (item.get("categories") or []):
-                c_names = cat.get("names") or []
-                c_vals = cat.get("values") or []
-                for idx_c, c_name in enumerate(c_names):
-                    if idx_c < len(c_vals):
-                        flat_map[str(c_name).lower()] = c_vals[idx_c]
-
-            pj = int(float(flat_map.get("gp", flat_map.get("gamesplayed", 0)) or 0))
-            ppg = float(flat_map.get("avgpoints", flat_map.get("pts", 0)) or 0.0)
-            fg_raw = float(flat_map.get("fieldgoalpct", flat_map.get("fg%", 0)) or 0.0)
-            fg_pct = round(fg_raw * 100.0 if 0 < fg_raw <= 1.0 else fg_raw, 1)
-
-            if pj <= 0:
-                continue
-
-            tpj = max(int(team_pj_map.get(eq, pj)), pj)
-            team_pj_map[eq] = tpj
-
-            fila = construir_fila_elegible(
-                pid=pid_raw,
-                nombre=nombre,
-                eq=eq,
-                pj=pj,
-                tpj=tpj,
-                fg_pct=fg_pct,
-                ppg=ppg,
-                max_pts=round(ppg * 1.45),
-                fecha_txt=fecha_txt,
-                equipos_hoy=eq_hoy,
-            )
-            if fila:
-                jugadores.append(fila)
-                sembrar_historial_jugador(historial, fila, fecha_txt)
-
-        if jugadores:
-            jugadores.sort(key=lambda x: (-x["ppg"], x["jugador"]))
-            base["team_games"] = team_pj_map
-            base["jugadores"] = jugadores
-            base["corte"] = fecha_txt
-            print(f"Base de puntos poblada desde ESPN: {len(jugadores)} jugadores")
-            return True
-    except Exception as e:
-        print(f"Aviso cargando base desde ESPN: {e}")
-    return False
-
-
-def poblar_base_puntos_si_vacia(base):
-    if base.get("historial_jugadores") or base.get("jugadores"):
-        return False
-
-    if poblar_desde_espn(base):
-        return True
-
-    fecha_txt = datetime.now(TZ_LOCAL).strftime("%d/%m/%Y")
-    eq_hoy = base.get("equipos_hoy", [])
-    team_pj_map = dict(base.get("team_games", {}))
-    historial = base.setdefault("historial_jugadores", {})
-    jugadores = []
-
-    for pid, nombre, eq, pj, tpj, fg_pct, ppg, max_pts in BASE_INICIAL_PUNTOS:
-        tpj_real = max(int(team_pj_map.get(eq, tpj)), pj)
-        team_pj_map[eq] = tpj_real
-        fila = construir_fila_elegible(
-            pid=pid,
-            nombre=nombre,
-            eq=eq,
-            pj=pj,
-            tpj=tpj_real,
-            fg_pct=fg_pct,
-            ppg=ppg,
-            max_pts=max_pts,
-            fecha_txt=fecha_txt,
-            equipos_hoy=eq_hoy,
-        )
-        if fila:
-            jugadores.append(fila)
-            sembrar_historial_jugador(historial, fila, fecha_txt)
-
-    if jugadores:
-        jugadores.sort(key=lambda x: (-x["ppg"], x["jugador"]))
-        base["team_games"] = team_pj_map
-        base["jugadores"] = jugadores
-        base["corte"] = fecha_txt
-        print(f"Base de puntos cargada con respaldo inicial continuo: {len(jugadores)} jugadores")
-        return True
-
-    return False
-
-
 def obtener_partidos_fecha_espn(fecha_yyyymmdd):
     url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={fecha_yyyymmdd}"
     partidos = []
@@ -352,12 +134,11 @@ def recalcular_jugadores_puntos(base, equipos_hoy):
         pid = int(pid_str)
         eq = normalizar_equipo(info.get("equipo", ""))
         juegos = info.get("juegos", [])
-        base_pj = int(info.get("base_pj", 0) or 0)
-        if not eq or (not juegos and base_pj <= 0):
+        if not eq or not juegos:
             continue
 
-        pj = base_pj + len(juegos)
-        tpj = max(int(team_games.get(eq, pj)), pj)
+        pj = len(juegos)
+        tpj = int(team_games.get(eq, pj))
         if tpj <= 0 or pj <= 0:
             continue
 
@@ -365,25 +146,23 @@ def recalcular_jugadores_puntos(base, equipos_hoy):
         if pct_pj < 80.0:
             continue
 
-        pts_nuevos = [int(x.get("pts", 0)) for x in juegos]
-        pts_total = int(info.get("base_pts", 0) or 0) + sum(pts_nuevos)
-        fgm_tot = float(info.get("base_fgm", 0) or 0) + sum(float(x.get("fgm", 0)) for x in juegos)
-        fga_tot = float(info.get("base_fga", 0) or 0) + sum(float(x.get("fga", 0)) for x in juegos)
+        pts_list = [int(x.get("pts", 0)) for x in juegos]
+        fgm_tot = sum(float(x.get("fgm", 0)) for x in juegos)
+        fga_tot = sum(float(x.get("fga", 0)) for x in juegos)
+        if fga_tot <= 0:
+            continue
 
-        fg_pct = round((fgm_tot / fga_tot) * 100.0, 1) if fga_tot > 0 else 0.0
+        fg_pct = round((fgm_tot / fga_tot) * 100.0, 1)
         if fg_pct <= 40.0:
             continue
 
-        ppg = round(pts_total / pj, 1)
+        ppg = round(sum(pts_list) / pj, 1)
         if ppg < 14.0:
             continue
 
-        b_ints = info.get("base_intervalos", {})
-        c_bajo = int(b_ints.get("0-14", 0) or 0) + sum(1 for p in pts_nuevos if p <= 14)
-        c_medio = int(b_ints.get("15-24", 0) or 0) + sum(1 for p in pts_nuevos if 15 <= p <= 24)
-        c_alto = int(b_ints.get("25+", 0) or 0) + sum(1 for p in pts_nuevos if p >= 25)
-
-        max_pts = max([int(info.get("base_max_pts", 0) or 0)] + pts_nuevos)
+        c_bajo = sum(1 for p in pts_list if p <= 14)
+        c_medio = sum(1 for p in pts_list if 15 <= p <= 24)
+        c_alto = sum(1 for p in pts_list if p >= 25)
         cp, cs, en = TEAM_COLORS.get(eq, ("#38bdf8", "#94a3b8", eq))
 
         elegibles.append({
@@ -401,7 +180,7 @@ def recalcular_jugadores_puntos(base, equipos_hoy):
             "pct_pj": pct_pj,
             "fg_pct": fg_pct,
             "ppg": ppg,
-            "max_pts": max_pts,
+            "max_pts": max(pts_list),
             "ultimo_partido": info.get("ultimo_partido", ""),
             "intervalos": {
                 "0-14": {"juegos": c_bajo, "pct": round((c_bajo / pj) * 100.0, 1)},
@@ -410,14 +189,8 @@ def recalcular_jugadores_puntos(base, equipos_hoy):
             },
         })
 
-    if elegibles:
-        elegibles.sort(key=lambda x: (-x["ppg"], x["jugador"]))
-        return elegibles
-
-    actuales = base.get("jugadores", [])
-    for item in actuales:
-        item["juega_hoy"] = item.get("equipo") in set(equipos_hoy)
-    return actuales
+    elegibles.sort(key=lambda x: (-x["ppg"], x["jugador"]))
+    return elegibles
 
 
 def recalcular_jugadores_triples(triples_base, equipos_hoy):
@@ -431,10 +204,12 @@ def recalcular_jugadores_triples(triples_base, equipos_hoy):
         juegos = info.get("juegos", [])
         if not eq or not juegos:
             continue
-        tpj = int(team_games.get(eq, len(juegos)))
+
         pj = len(juegos)
+        tpj = int(team_games.get(eq, pj))
         if tpj <= 0 or pj <= 0:
             continue
+
         pct_pj = round((pj / tpj) * 100.0, 1)
         if pct_pj < 80.0:
             continue
@@ -477,14 +252,8 @@ def recalcular_jugadores_triples(triples_base, equipos_hoy):
             "freq": freq,
         })
 
-    if elegibles:
-        elegibles.sort(key=lambda x: (-x["prob_2"], -x["prob_1"], x["jugador"]))
-        return elegibles
-
-    actuales = triples_base.get("jugadores", [])
-    for item in actuales:
-        item["juega_hoy"] = item.get("equipo") in set(equipos_hoy)
-    return actuales
+    elegibles.sort(key=lambda x: (-x["prob_2"], -x["prob_1"], x["jugador"]))
+    return elegibles
 
 
 def sincronizar_todo():
@@ -526,7 +295,7 @@ def sincronizar_todo():
     tg_pts = base_pts.get("team_games", {})
     tg_3p = base_3p.get("team_games", {})
 
-    cambio_pts = poblar_base_puntos_si_vacia(base_pts)
+    cambio_pts = False
     cambio_3p = False
 
     try:
@@ -587,18 +356,7 @@ def sincronizar_todo():
                                 if gid not in games_pts:
                                     e_pts = hist_pts.setdefault(
                                         p_key,
-                                        {
-                                            "jugador": nombre,
-                                            "equipo": tri,
-                                            "ultimo_partido": fecha_txt,
-                                            "base_pj": 0,
-                                            "base_pts": 0,
-                                            "base_fgm": 0,
-                                            "base_fga": 0,
-                                            "base_max_pts": 0,
-                                            "base_intervalos": {"0-14": 0, "15-24": 0, "25+": 0},
-                                            "juegos": [],
-                                        },
+                                        {"jugador": nombre, "equipo": tri, "ultimo_partido": fecha_txt, "juegos": []},
                                     )
                                     e_pts["jugador"], e_pts["equipo"], e_pts["ultimo_partido"] = nombre, tri, fecha_txt
                                     if not any(j.get("game_id") == gid for j in e_pts["juegos"]):
