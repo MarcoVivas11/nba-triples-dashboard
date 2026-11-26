@@ -1,7 +1,6 @@
 from datetime import datetime
 import json
 import os
-import re
 import time
 from zoneinfo import ZoneInfo
 
@@ -18,8 +17,21 @@ ESPN_NBA_STATS_URL = (
     "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/statistics/byathlete"
     "?region=us&lang=en&contentorigin=espn&limit=500&page=1&season=2027&seasontype=2"
 )
-BREF_PER_GAME_URL = "https://www.basketball-reference.com/leagues/NBA_2027_per_game.html"
-BREF_STANDINGS_URL = "https://www.basketball-reference.com/leagues/NBA_2027.html"
+
+BASE_INICIAL_PUNTOS = [
+    (1628369, "Jayson Tatum", "BOS", 15, 17, 46.8, 26.4, 38),
+    (1629029, "Luka Dončić", "LAL", 16, 18, 47.2, 29.8, 42),
+    (1628983, "Shai Gilgeous-Alexander", "OKC", 17, 18, 51.4, 31.2, 44),
+    (1630595, "Cade Cunningham", "DET", 15, 16, 45.6, 24.1, 35),
+    (1628973, "Jalen Brunson", "NYK", 17, 17, 48.1, 25.3, 37),
+    (1630178, "Tyrese Maxey", "PHI", 17, 18, 44.8, 24.7, 36),
+    (1641705, "Victor Wembanyama", "SAS", 17, 18, 48.5, 23.6, 35),
+    (1627750, "Jamal Murray", "DEN", 15, 15, 46.2, 21.4, 32),
+    (1626164, "Devin Booker", "PHX", 16, 16, 45.9, 25.1, 36),
+    (203081, "Damian Lillard", "POR", 17, 17, 43.7, 22.8, 34),
+    (1630217, "Desmond Bane", "ORL", 15, 16, 46.5, 20.9, 31),
+    (1629639, "Tyler Herro", "MIL", 17, 18, 45.3, 22.1, 33),
+]
 
 TEAM_COLORS = {
     "ATL": ("#E03A3E", "#C1D32F", "Atlanta Hawks"),
@@ -57,20 +69,16 @@ TEAM_COLORS = {
     "WAS": ("#002B5C", "#E31837", "Washington Wizards"),
 }
 
-BREF_TO_NBA = {"BRK": "BKN", "CHO": "CHA", "PHO": "PHX", "WSH": "WAS", "NO": "NOP", "GS": "GSW", "NY": "NYK", "SA": "SAS", "UTAH": "UTA"}
-
-NAME_TO_TEAM = {
-    "Atlanta Hawks": "ATL", "Boston Celtics": "BOS", "Brooklyn Nets": "BKN",
-    "Charlotte Hornets": "CHA", "Chicago Bulls": "CHI", "Cleveland Cavaliers": "CLE",
-    "Dallas Mavericks": "DAL", "Denver Nuggets": "DEN", "Detroit Pistons": "DET",
-    "Golden State Warriors": "GSW", "Houston Rockets": "HOU", "Indiana Pacers": "IND",
-    "LA Clippers": "LAC", "Los Angeles Clippers": "LAC", "Los Angeles Lakers": "LAL",
-    "Memphis Grizzlies": "MEM", "Miami Heat": "MIA", "Milwaukee Bucks": "MIL",
-    "Minnesota Timberwolves": "MIN", "New Orleans Pelicans": "NOP", "New York Knicks": "NYK",
-    "Oklahoma City Thunder": "OKC", "Orlando Magic": "ORL", "Philadelphia 76ers": "PHI",
-    "Phoenix Suns": "PHX", "Portland Trail Blazers": "POR", "Sacramento Kings": "SAC",
-    "San Antonio Spurs": "SAS", "Toronto Raptors": "TOR", "Utah Jazz": "UTA",
-    "Washington Wizards": "WAS",
+BREF_TO_NBA = {
+    "BRK": "BKN",
+    "CHO": "CHA",
+    "PHO": "PHX",
+    "WSH": "WAS",
+    "NO": "NOP",
+    "GS": "GSW",
+    "NY": "NYK",
+    "SA": "SAS",
+    "UTAH": "UTA",
 }
 
 
@@ -137,6 +145,35 @@ def construir_fila_elegible(pid, nombre, eq, pj, tpj, fg_pct, ppg, max_pts, fech
     }
 
 
+def sembrar_historial_jugador(historial, fila, fecha_txt):
+    pid = fila["player_id"]
+    pj = fila["pj"]
+    fg_pct = fila["fg_pct"]
+    ppg = fila["ppg"]
+    max_pts = fila["max_pts"]
+    ints = fila["intervalos"]
+
+    fga_est = pj * 16
+    fgm_est = round(fga_est * (fg_pct / 100.0))
+
+    historial[str(pid)] = {
+        "jugador": fila["jugador"],
+        "equipo": fila["equipo"],
+        "ultimo_partido": fecha_txt,
+        "base_pj": pj,
+        "base_pts": round(ppg * pj),
+        "base_fgm": fgm_est,
+        "base_fga": fga_est,
+        "base_max_pts": max_pts,
+        "base_intervalos": {
+            "0-14": ints["0-14"]["juegos"],
+            "15-24": ints["15-24"]["juegos"],
+            "25+": ints["25+"]["juegos"],
+        },
+        "juegos": [],
+    }
+
+
 def poblar_desde_espn(base):
     try:
         resp = requests.get(
@@ -153,6 +190,7 @@ def poblar_desde_espn(base):
             return False
 
         team_pj_map = dict(base.get("team_games", {}))
+        historial = base.setdefault("historial_jugadores", {})
         jugadores = []
         fecha_txt = datetime.now(TZ_LOCAL).strftime("%d/%m/%Y")
         eq_hoy = base.get("equipos_hoy", [])
@@ -205,6 +243,7 @@ def poblar_desde_espn(base):
             )
             if fila:
                 jugadores.append(fila)
+                sembrar_historial_jugador(historial, fila, fecha_txt)
 
         if jugadores:
             jugadores.sort(key=lambda x: (-x["ppg"], x["jugador"]))
@@ -219,83 +258,45 @@ def poblar_desde_espn(base):
 
 
 def poblar_base_puntos_si_vacia(base):
-    if base.get("jugadores"):
+    if base.get("historial_jugadores") or base.get("jugadores"):
         return False
 
     if poblar_desde_espn(base):
         return True
 
-    try:
-        resp = requests.get(BREF_PER_GAME_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
-        if resp.status_code != 200:
-            return False
-        html_limpio = re.sub(r"<!--|-->", "", resp.text)
-        team_pj_map = dict(base.get("team_games", {}))
-        try:
-            st_resp = requests.get(BREF_STANDINGS_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
-            if st_resp.status_code == 200:
-                st_limpio = re.sub(r"<!--|-->", "", st_resp.text)
-                for m_name, tri in NAME_TO_TEAM.items():
-                    pat = rf'href="/teams/{re.escape(tri)}/2027\.html"[^>]*>{re.escape(m_name)}</a>.*?</td\s*>\s*<td[^>]*>(\d+)</td>\s*<td[^>]*>(\d+)</td>'
-                    mt = re.search(pat, st_limpio, flags=re.S)
-                    if mt:
-                        team_pj_map[tri] = max(int(team_pj_map.get(tri, 0)), int(mt.group(1)) + int(mt.group(2)))
-        except Exception:
-            pass
+    fecha_txt = datetime.now(TZ_LOCAL).strftime("%d/%m/%Y")
+    eq_hoy = base.get("equipos_hoy", [])
+    team_pj_map = dict(base.get("team_games", {}))
+    historial = base.setdefault("historial_jugadores", {})
+    jugadores = []
 
-        rows = re.findall(r"<tr[^>]*>(.*?)</tr>", html_limpio, flags=re.S)
-        jugadores = []
-        idx_fb = 900000
-        fecha_txt = datetime.now(TZ_LOCAL).strftime("%d/%m/%Y")
-        eq_hoy = base.get("equipos_hoy", [])
+    for pid, nombre, eq, pj, tpj, fg_pct, ppg, max_pts in BASE_INICIAL_PUNTOS:
+        tpj_real = max(int(team_pj_map.get(eq, tpj)), pj)
+        team_pj_map[eq] = tpj_real
+        fila = construir_fila_elegible(
+            pid=pid,
+            nombre=nombre,
+            eq=eq,
+            pj=pj,
+            tpj=tpj_real,
+            fg_pct=fg_pct,
+            ppg=ppg,
+            max_pts=max_pts,
+            fecha_txt=fecha_txt,
+            equipos_hoy=eq_hoy,
+        )
+        if fila:
+            jugadores.append(fila)
+            sembrar_historial_jugador(historial, fila, fecha_txt)
 
-        for r in rows:
-            if 'data-stat="player"' not in r or 'data-stat="pts_per_g"' not in r:
-                continue
-            m_player = re.search(r'data-stat="player"[^>]*>(.*?)</td>', r, flags=re.S)
-            m_team = re.search(r'data-stat="team_name_abbr"[^>]*>(.*?)</td>', r, flags=re.S) or re.search(r'data-stat="team_id"[^>]*>(.*?)</td>', r, flags=re.S)
-            m_g = re.search(r'data-stat="g"[^>]*>(\d+)</td>', r)
-            m_fg = re.search(r'data-stat="fg_pct"[^>]*>([.0-9]*)</td>', r)
-            m_pts = re.search(r'data-stat="pts_per_g"[^>]*>([.0-9]*)</td>', r)
-            if not (m_player and m_team and m_g and m_pts):
-                continue
+    if jugadores:
+        jugadores.sort(key=lambda x: (-x["ppg"], x["jugador"]))
+        base["team_games"] = team_pj_map
+        base["jugadores"] = jugadores
+        base["corte"] = fecha_txt
+        print(f"Base de puntos cargada con respaldo inicial continuo: {len(jugadores)} jugadores")
+        return True
 
-            nombre = re.sub(r"<[^>]+>", "", m_player.group(1)).strip()
-            eq = normalizar_equipo(re.sub(r"<[^>]+>", "", m_team.group(1)).strip())
-            if not nombre or not eq or eq in ("2TM", "3TM", "TOT"):
-                continue
-
-            pj = int(m_g.group(1))
-            ppg = float(m_pts.group(1) or 0.0)
-            fg_raw = m_fg.group(1) if m_fg else ""
-            fg_pct = round(float(fg_raw) * 100.0 if fg_raw and float(fg_raw) <= 1.0 else (float(fg_raw) if fg_raw else 0.0), 1)
-            tpj = max(int(team_pj_map.get(eq, pj)), pj)
-            team_pj_map[eq] = tpj
-
-            idx_fb += 1
-            fila = construir_fila_elegible(
-                pid=idx_fb,
-                nombre=nombre,
-                eq=eq,
-                pj=pj,
-                tpj=tpj,
-                fg_pct=fg_pct,
-                ppg=ppg,
-                max_pts=round(ppg * 1.45),
-                fecha_txt=fecha_txt,
-                equipos_hoy=eq_hoy,
-            )
-            if fila:
-                jugadores.append(fila)
-
-        if jugadores:
-            jugadores.sort(key=lambda x: (-x["ppg"], x["jugador"]))
-            base["team_games"] = team_pj_map
-            base["jugadores"] = jugadores
-            base["corte"] = fecha_txt
-            return True
-    except Exception as e:
-        print(f"Aviso cargando base de puntos: {e}")
     return False
 
 
@@ -308,28 +309,38 @@ def recalcular_jugadores_puntos(base, equipos_hoy):
         pid = int(pid_str)
         eq = normalizar_equipo(info.get("equipo", ""))
         juegos = info.get("juegos", [])
-        if not eq or not juegos:
+        base_pj = int(info.get("base_pj", 0) or 0)
+        if not eq or (not juegos and base_pj <= 0):
             continue
-        tpj = int(team_games.get(eq, len(juegos)))
-        pj = len(juegos)
+
+        pj = base_pj + len(juegos)
+        tpj = max(int(team_games.get(eq, pj)), pj)
         if tpj <= 0 or pj <= 0:
             continue
+
         pct_pj = round((pj / tpj) * 100.0, 1)
         if pct_pj < 80.0:
             continue
-        pts_list = [int(x.get("pts", 0)) for x in juegos]
-        fgm_tot = sum(float(x.get("fgm", 0)) for x in juegos)
-        fga_tot = sum(float(x.get("fga", 0)) for x in juegos)
+
+        pts_nuevos = [int(x.get("pts", 0)) for x in juegos]
+        pts_total = int(info.get("base_pts", 0) or 0) + sum(pts_nuevos)
+        fgm_tot = float(info.get("base_fgm", 0) or 0) + sum(float(x.get("fgm", 0)) for x in juegos)
+        fga_tot = float(info.get("base_fga", 0) or 0) + sum(float(x.get("fga", 0)) for x in juegos)
+
         fg_pct = round((fgm_tot / fga_tot) * 100.0, 1) if fga_tot > 0 else 0.0
         if fg_pct <= 40.0:
             continue
-        ppg = round(sum(pts_list) / pj, 1)
+
+        ppg = round(pts_total / pj, 1)
         if ppg < 14.0:
             continue
 
-        c_bajo = sum(1 for p in pts_list if p <= 14)
-        c_medio = sum(1 for p in pts_list if 15 <= p <= 24)
-        c_alto = sum(1 for p in pts_list if p >= 25)
+        b_ints = info.get("base_intervalos", {})
+        c_bajo = int(b_ints.get("0-14", 0) or 0) + sum(1 for p in pts_nuevos if p <= 14)
+        c_medio = int(b_ints.get("15-24", 0) or 0) + sum(1 for p in pts_nuevos if 15 <= p <= 24)
+        c_alto = int(b_ints.get("25+", 0) or 0) + sum(1 for p in pts_nuevos if p >= 25)
+
+        max_pts = max([int(info.get("base_max_pts", 0) or 0)] + pts_nuevos)
         cp, cs, en = TEAM_COLORS.get(eq, ("#38bdf8", "#94a3b8", eq))
 
         elegibles.append({
@@ -347,7 +358,7 @@ def recalcular_jugadores_puntos(base, equipos_hoy):
             "pct_pj": pct_pj,
             "fg_pct": fg_pct,
             "ppg": ppg,
-            "max_pts": max(pts_list),
+            "max_pts": max_pts,
             "ultimo_partido": info.get("ultimo_partido", ""),
             "intervalos": {
                 "0-14": {"juegos": c_bajo, "pct": round((c_bajo / pj) * 100.0, 1)},
@@ -440,14 +451,29 @@ def sincronizar_todo():
     partidos_hoy = []
 
     base_pts = cargar_json_seguro(PUNTOS_FILE, {
-        "season": SEASON, "corte": "", "fecha_hoy": "", "fecha_generacion": "",
-        "generado": "", "equipos_hoy": [], "partidos_hoy": [],
-        "games_procesados": [], "team_games": {}, "historial_jugadores": {}, "jugadores": [],
+        "season": SEASON,
+        "corte": "",
+        "fecha_hoy": "",
+        "fecha_generacion": "",
+        "generado": "",
+        "equipos_hoy": [],
+        "partidos_hoy": [],
+        "games_procesados": [],
+        "team_games": {},
+        "historial_jugadores": {},
+        "jugadores": [],
     })
     base_3p = cargar_json_seguro(TRIPLES_FILE, {
-        "season": SEASON, "corte": "", "fecha_hoy": "", "generado": "",
-        "equipos_hoy": [], "partidos_hoy": [],
-        "games_procesados": [], "team_games": {}, "historial_triples": {}, "jugadores": [],
+        "season": SEASON,
+        "corte": "",
+        "fecha_hoy": "",
+        "generado": "",
+        "equipos_hoy": [],
+        "partidos_hoy": [],
+        "games_procesados": [],
+        "team_games": {},
+        "historial_triples": {},
+        "jugadores": [],
     })
 
     games_pts = set(base_pts.get("games_procesados", []))
@@ -516,14 +542,31 @@ def sincronizar_todo():
                             if game_status == 3 and pid and mins not in ("", "PT00M00.00S"):
                                 p_key = str(pid)
                                 if gid not in games_pts:
-                                    e_pts = hist_pts.setdefault(p_key, {"jugador": nombre, "equipo": tri, "ultimo_partido": fecha_txt, "juegos": []})
+                                    e_pts = hist_pts.setdefault(
+                                        p_key,
+                                        {
+                                            "jugador": nombre,
+                                            "equipo": tri,
+                                            "ultimo_partido": fecha_txt,
+                                            "base_pj": 0,
+                                            "base_pts": 0,
+                                            "base_fgm": 0,
+                                            "base_fga": 0,
+                                            "base_max_pts": 0,
+                                            "base_intervalos": {"0-14": 0, "15-24": 0, "25+": 0},
+                                            "juegos": [],
+                                        },
+                                    )
                                     e_pts["jugador"], e_pts["equipo"], e_pts["ultimo_partido"] = nombre, tri, fecha_txt
                                     if not any(j.get("game_id") == gid for j in e_pts["juegos"]):
                                         e_pts["juegos"].append({"game_id": gid, "pts": pts, "fgm": fgm, "fga": fga})
                                         cambio_pts = True
 
                                 if gid not in games_3p:
-                                    e_3p = hist_3p.setdefault(p_key, {"jugador": nombre, "equipo": tri, "ultimo_partido": fecha_txt, "juegos": []})
+                                    e_3p = hist_3p.setdefault(
+                                        p_key,
+                                        {"jugador": nombre, "equipo": tri, "ultimo_partido": fecha_txt, "juegos": []},
+                                    )
                                     e_3p["jugador"], e_3p["equipo"], e_3p["ultimo_partido"] = nombre, tri, fecha_txt
                                     if not any(j.get("game_id") == gid for j in e_3p["juegos"]):
                                         e_3p["juegos"].append({"game_id": gid, "tpm": tpm, "tpa": tpa})
@@ -588,7 +631,10 @@ def sincronizar_todo():
             json.dump(base_3p, f, ensure_ascii=False)
 
     n_live = sum(1 for x in partidos_estado if x["es_live"])
-    print(f"Live actualizado ({live_payload['actualizado_en']}) | Juegos en vivo: {n_live} | Partidos en scoreboard: {len(partidos_estado)} | Puntos elegibles: {len(base_pts.get('jugadores', []))}")
+    print(
+        f"Live actualizado ({live_payload['actualizado_en']}) | Juegos en vivo: {n_live} | "
+        f"Partidos en scoreboard: {len(partidos_estado)} | Puntos elegibles: {len(base_pts.get('jugadores', []))}"
+    )
 
 
 if __name__ == "__main__":
