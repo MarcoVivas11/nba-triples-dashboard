@@ -300,6 +300,49 @@ def poblar_base_puntos_si_vacia(base):
     return False
 
 
+def obtener_partidos_fecha_espn(fecha_yyyymmdd):
+    url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={fecha_yyyymmdd}"
+    partidos = []
+    equipos = set()
+    partidos_estado = []
+    try:
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        if resp.status_code != 200:
+            return partidos, equipos, partidos_estado
+        data = resp.json()
+        for ev in data.get("events") or []:
+            ev_id = str(ev.get("id") or "")
+            comp = (ev.get("competitions") or [{}])[0]
+            comps = comp.get("competitors") or []
+            status_obj = ((comp.get("status") or {}).get("type")) or {}
+            status_text = str(status_obj.get("shortDetail") or status_obj.get("description") or "").strip()
+            state = str(status_obj.get("state") or "").lower()
+            es_live = state == "in"
+
+            home = ""
+            away = ""
+            for c in comps:
+                tri = normalizar_equipo(((c.get("team") or {}).get("abbreviation")) or "")
+                if c.get("homeAway") == "home":
+                    home = tri
+                elif c.get("homeAway") == "away":
+                    away = tri
+            if away and home:
+                matchup = f"{away} @ {home}"
+                partidos.append(matchup)
+                equipos.add(away)
+                equipos.add(home)
+                partidos_estado.append({
+                    "game_id": ev_id,
+                    "matchup": matchup,
+                    "status_text": status_text,
+                    "es_live": es_live,
+                })
+    except Exception as e:
+        print(f"Aviso calendario ESPN: {e}")
+    return partidos, equipos, partidos_estado
+
+
 def recalcular_jugadores_puntos(base, equipos_hoy):
     team_games = base.get("team_games", {})
     historial = base.get("historial_jugadores", {})
@@ -593,6 +636,17 @@ def sincronizar_todo():
         print(f"Aviso en vivo: {e}")
 
     ahora = datetime.now(TZ_LOCAL)
+    todos_finalizados = bool(partidos_estado) and all(
+        not p["es_live"] and "FINAL" in str(p["status_text"]).upper()
+        for p in partidos_estado
+    )
+    if (not partidos_hoy) or (todos_finalizados and ahora.hour < 17):
+        partidos_espn, equipos_espn, estado_espn = obtener_partidos_fecha_espn(ahora.strftime("%Y%m%d"))
+        if partidos_espn:
+            partidos_hoy = partidos_espn
+            equipos_hoy = equipos_espn
+            partidos_estado = estado_espn
+
     eq_sorted = sorted(equipos_hoy)
     live_payload = {
         "actualizado_en": ahora.strftime("%d/%m/%Y %I:%M:%S %p"),
@@ -604,18 +658,17 @@ def sincronizar_todo():
     with open(LIVE_FILE, "w", encoding="utf-8") as f:
         json.dump(live_payload, f, ensure_ascii=False)
 
-    if cambio_pts or not os.path.exists(PUNTOS_FILE):
-        base_pts["games_procesados"] = sorted(games_pts)
-        base_pts["team_games"] = tg_pts
-        base_pts["historial_jugadores"] = hist_pts
-        base_pts["equipos_hoy"] = eq_sorted
-        base_pts["partidos_hoy"] = partidos_hoy
-        base_pts["fecha_hoy"] = ahora.strftime("%d/%m/%Y")
-        base_pts["fecha_generacion"] = ahora.strftime("%Y-%m-%d")
-        base_pts["generado"] = ahora.strftime("%d/%m/%Y %I:%M %p")
-        base_pts["jugadores"] = recalcular_jugadores_puntos(base_pts, eq_sorted)
-        with open(PUNTOS_FILE, "w", encoding="utf-8") as f:
-            json.dump(base_pts, f, ensure_ascii=False)
+    base_pts["games_procesados"] = sorted(games_pts)
+    base_pts["team_games"] = tg_pts
+    base_pts["historial_jugadores"] = hist_pts
+    base_pts["equipos_hoy"] = eq_sorted
+    base_pts["partidos_hoy"] = partidos_hoy
+    base_pts["fecha_hoy"] = ahora.strftime("%d/%m/%Y")
+    base_pts["fecha_generacion"] = ahora.strftime("%Y-%m-%d")
+    base_pts["generado"] = ahora.strftime("%d/%m/%Y %I:%M %p")
+    base_pts["jugadores"] = recalcular_jugadores_puntos(base_pts, eq_sorted)
+    with open(PUNTOS_FILE, "w", encoding="utf-8") as f:
+        json.dump(base_pts, f, ensure_ascii=False)
 
     if cambio_3p or os.path.exists(TRIPLES_FILE):
         base_3p["games_procesados"] = sorted(games_3p)
@@ -633,7 +686,7 @@ def sincronizar_todo():
     n_live = sum(1 for x in partidos_estado if x["es_live"])
     print(
         f"Live actualizado ({live_payload['actualizado_en']}) | Juegos en vivo: {n_live} | "
-        f"Partidos en scoreboard: {len(partidos_estado)} | Puntos elegibles: {len(base_pts.get('jugadores', []))}"
+        f"Partidos hoy: {len(partidos_hoy)} | Puntos elegibles: {len(base_pts.get('jugadores', []))}"
     )
 
 
