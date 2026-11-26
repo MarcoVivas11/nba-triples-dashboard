@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
+import re
 import time
 from zoneinfo import ZoneInfo
 
@@ -9,10 +10,17 @@ import requests
 
 TZ_LOCAL = ZoneInfo("America/Caracas")
 SEASON = "2026-27"
+SEASON_START_DATE = datetime(2026, 10, 20, tzinfo=TZ_LOCAL).date()
+MAX_ESPN_GAMES_PER_RUN = 18
+
 PUNTOS_FILE = "nba_puntos.json"
 TRIPLES_FILE = "nba_triples.json"
 LIVE_FILE = "nba_live.json"
-DATOS_BASE_FILE = "nba_2026_27_datos.json"
+
+HEADERS_ESPN = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json",
+}
 
 TEAM_COLORS = {
     "ATL": ("#E03A3E", "#C1D32F", "Atlanta Hawks"),
@@ -96,14 +104,34 @@ def fecha_mas_reciente(actual_str, candidata_str):
         return candidata_str
 
 
-def parsear_pj_str(pj_str):
-    try:
-        partes = str(pj_str or "").split("/")
-        if len(partes) == 2:
+def parsear_hecho_o_intentado(val):
+    s = str(val or "").strip()
+    if "-" in s:
+        partes = s.split("-", 1)
+        try:
             return int(partes[0].strip()), int(partes[1].strip())
+        except Exception:
+            return 0, 0
+    try:
+        return int(float(s)), 0
     except Exception:
-        pass
-    return 0, 0
+        return 0, 0
+
+
+def minutos_jugados_espn(min_str):
+    s = str(min_str or "").strip()
+    if not s or s.upper() in ("0", "00", "DNP", "--"):
+        return 0.0
+    if ":" in s:
+        partes = s.split(":")
+        try:
+            m = float(partes[0])
+            sec = float(partes[1]) if len(partes) > 1 else 0.0
+            return m + (sec / 60.0)
+        except Exception:
+            return 0.0
+    m_match = re.search(r"(\d+(?:\.\d+)?)", s)
+    return float(m_match.group(1)) if m_match else 0.0
 
 
 def obtener_partidos_fecha_espn(fecha_yyyymmdd):
@@ -111,10 +139,11 @@ def obtener_partidos_fecha_espn(fecha_yyyymmdd):
     partidos = []
     equipos = set()
     partidos_estado = []
+    finalizados = []
     try:
-        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=12)
+        resp = requests.get(url, headers=HEADERS_ESPN, timeout=15)
         if resp.status_code != 200:
-            return partidos, equipos, partidos_estado
+            return partidos, equipos, partidos_estado, finalizados
         data = resp.json()
         for ev in data.get("events") or []:
             ev_id = str(ev.get("id") or "")
@@ -123,6 +152,7 @@ def obtener_partidos_fecha_espn(fecha_yyyymmdd):
             status_obj = ((comp.get("status") or {}).get("type")) or {}
             status_text = str(status_obj.get("shortDetail") or status_obj.get("description") or "").strip()
             state = str(status_obj.get("state") or "").lower()
+            completed = bool(status_obj.get("completed"))
             es_live = state == "in"
 
             home = ""
@@ -144,44 +174,207 @@ def obtener_partidos_fecha_espn(fecha_yyyymmdd):
                     "status_text": status_text,
                     "es_live": es_live,
                 })
+                if completed or state == "post":
+                    finalizados.append({
+                        "event_id": ev_id,
+                        "away": away,
+                        "home": home,
+                    })
     except Exception as e:
-        print(f"Aviso calendario ESPN: {e}")
-    return partidos, equipos, partidos_estado
+        print(f"Aviso calendario ESPN ({fecha_yyyymmdd}): {e}")
+    return partidos, equipos, partidos_estado, finalizados
 
 
-def importar_base_triples_desde_archivo(base_3p, equipos_hoy):
-    if not os.path.exists(DATOS_BASE_FILE):
-        return False
-    try:
-        with open(DATOS_BASE_FILE, "r", encoding="utf-8") as f:
-            raw = json.load(f)
-        jugadores_raw = raw.get("jugadores") or []
-        if not jugadores_raw:
-            return False
+def procesar_evento_espn(
+    ev_id,
+    away,
+    home,
+    fecha_txt,
+    games_pts,
+    games_3p,
+    hist_pts,
+    hist_3p,
+    tg_pts,
+    tg_3p,
+):
+    gid = f"ESPN_{ev_id}"
+    if gid in games_pts and gid in games_3p:
+        return False, False
 
-        tg = dict(base_3p.get("team_games", {}))
-        jugadores_actualizados = []
-        for item in jugadores_raw:
-            eq = normalizar_equipo(item.get("equipo", ""))
-            pj, tpj = parsear_pj_str(item.get("pj_str", ""))
-            if eq and tpj > 0:
-                tg[eq] = max(int(tg.get(eq, 0) or 0), tpj)
-            cp, cs, en = TEAM_COLORS.get(eq, ("#38bdf8", "#94a3b8", item.get("equipo_nombre", eq)))
-            fila = dict(item)
-            fila["equipo"] = eq
-            fila["equipo_nombre"] = en
-            fila["color_prim"] = cp
-            fila["color_sec"] = cs
-            fila["juega_hoy"] = eq in set(equipos_hoy)
-            jugadores_actualizados.append(fila)
+    url = f"https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={ev_id}"
+    resp = requests.get(url, headers=HEADERS_ESPN, timeout=15)
+    if resp.status_code != 200:
+        return False, False
 
-        base_3p["team_games"] = tg
-        base_3p["corte"] = raw.get("corte") or base_3p.get("corte") or ""
-        base_3p["jugadores"] = jugadores_actualizados
-        return True
-    except Exception as e:
-        print(f"Aviso leyendo {DATOS_BASE_FILE}: {e}")
-        return False
+    data = resp.json()
+    box = data.get("boxscore") or {}
+    players_groups = box.get("players") or []
+    if not players_groups:
+        return False, False
+
+    cambio_pts = False
+    cambio_3p = False
+
+    for grp in players_groups:
+        team_info = grp.get("team") or {}
+        tri = normalizar_equipo(team_info.get("abbreviation") or "")
+        if tri not in TEAM_COLORS:
+            continue
+
+        stat_blocks = grp.get("statistics") or []
+        if not stat_blocks:
+            continue
+
+        block = stat_blocks[0]
+        labels = [str(x).upper() for x in (block.get("labels") or [])]
+        athletes = block.get("athletes") or []
+
+        def idx_col(col_name, fallback):
+            if col_name in labels:
+                return labels.index(col_name)
+            return fallback
+
+        i_min = idx_col("MIN", 0)
+        i_fg = idx_col("FG", 1)
+        i_3pt = idx_col("3PT", 2)
+        i_pts = -1
+        for candidate in ("PTS",):
+            if candidate in labels:
+                i_pts = labels.index(candidate)
+
+        for ath_entry in athletes:
+            if ath_entry.get("didNotPlay"):
+                continue
+            ath = ath_entry.get("athlete") or {}
+            pid_raw = ath.get("id")
+            nombre = str(ath.get("displayName") or "").strip()
+            stats_arr = ath_entry.get("stats") or []
+            if not pid_raw or not nombre or not stats_arr:
+                continue
+
+            min_val = stats_arr[i_min] if i_min < len(stats_arr) else ""
+            if minutos_jugados_espn(min_val) <= 0.0:
+                continue
+
+            fg_str = stats_arr[i_fg] if i_fg < len(stats_arr) else "0-0"
+            t3_str = stats_arr[i_3pt] if i_3pt < len(stats_arr) else "0-0"
+            pts_str = stats_arr[i_pts] if (0 <= i_pts < len(stats_arr)) else "0"
+
+            fgm, fga = parsear_hecho_o_intentado(fg_str)
+            tpm, tpa = parsear_hecho_o_intentado(t3_str)
+            pts, _ = parsear_hecho_o_intentado(pts_str)
+
+            try:
+                pid = int(pid_raw)
+            except Exception:
+                continue
+            p_key = str(pid)
+
+            if gid not in games_pts:
+                e_pts = hist_pts.setdefault(
+                    p_key,
+                    {"jugador": nombre, "equipo": tri, "ultimo_partido": fecha_txt, "juegos": []},
+                )
+                e_pts["jugador"] = nombre
+                e_pts["equipo"] = tri
+                e_pts["ultimo_partido"] = fecha_mas_reciente(e_pts.get("ultimo_partido", ""), fecha_txt)
+                if not any(j.get("game_id") == gid for j in e_pts["juegos"]):
+                    e_pts["juegos"].append({
+                        "game_id": gid,
+                        "fecha": fecha_txt,
+                        "pts": pts,
+                        "fgm": fgm,
+                        "fga": fga,
+                    })
+                    cambio_pts = True
+
+            if gid not in games_3p:
+                e_3p = hist_3p.setdefault(
+                    p_key,
+                    {"jugador": nombre, "equipo": tri, "ultimo_partido": fecha_txt, "juegos": []},
+                )
+                e_3p["jugador"] = nombre
+                e_3p["equipo"] = tri
+                e_3p["ultimo_partido"] = fecha_mas_reciente(e_3p.get("ultimo_partido", ""), fecha_txt)
+                if not any(j.get("game_id") == gid for j in e_3p["juegos"]):
+                    e_3p["juegos"].append({
+                        "game_id": gid,
+                        "fecha": fecha_txt,
+                        "tpm": tpm,
+                        "tpa": tpa,
+                    })
+                    cambio_3p = True
+
+    if gid not in games_pts:
+        for t in (away, home):
+            if t:
+                tg_pts[t] = int(tg_pts.get(t, 0) or 0) + 1
+        games_pts.add(gid)
+        cambio_pts = True
+
+    if gid not in games_3p:
+        for t in (away, home):
+            if t:
+                tg_3p[t] = int(tg_3p.get(t, 0) or 0) + 1
+        games_3p.add(gid)
+        cambio_3p = True
+
+    return cambio_pts, cambio_3p
+
+
+def sincronizar_historial_espn(
+    hoy_local,
+    games_pts,
+    games_3p,
+    hist_pts,
+    hist_3p,
+    tg_pts,
+    tg_3p,
+):
+    cambio_pts_total = False
+    cambio_3p_total = False
+    procesados = 0
+
+    cursor = hoy_local
+    while cursor >= SEASON_START_DATE and procesados < MAX_ESPN_GAMES_PER_RUN:
+        fecha_yyyymmdd = cursor.strftime("%Y%m%d")
+        fecha_txt = cursor.strftime("%d/%m/%Y")
+        _, _, _, finalizados = obtener_partidos_fecha_espn(fecha_yyyymmdd)
+
+        for ev in finalizados:
+            if procesados >= MAX_ESPN_GAMES_PER_RUN:
+                break
+            ev_id = ev.get("event_id")
+            if not ev_id:
+                continue
+            gid = f"ESPN_{ev_id}"
+            if gid in games_pts and gid in games_3p:
+                continue
+            try:
+                c_p, c_3 = procesar_evento_espn(
+                    ev_id=ev_id,
+                    away=ev["away"],
+                    home=ev["home"],
+                    fecha_txt=fecha_txt,
+                    games_pts=games_pts,
+                    games_3p=games_3p,
+                    hist_pts=hist_pts,
+                    hist_3p=hist_3p,
+                    tg_pts=tg_pts,
+                    tg_3p=tg_3p,
+                )
+                if c_p:
+                    cambio_pts_total = True
+                if c_3:
+                    cambio_3p_total = True
+                procesados += 1
+                time.sleep(0.2)
+            except Exception as e:
+                print(f"Aviso evento ESPN {ev_id}: {e}")
+
+        cursor -= timedelta(days=1)
+
+    return cambio_pts_total, cambio_3p_total
 
 
 def recalcular_jugadores_puntos(base, equipos_hoy):
@@ -321,14 +514,8 @@ def recalcular_jugadores_triples(triples_base, equipos_hoy):
             "freq": freq,
         })
 
-    if elegibles:
-        elegibles.sort(key=lambda x: (-x["prob_2"], -x["prob_1"], x["jugador"]))
-        return elegibles
-
-    actuales = triples_base.get("jugadores", [])
-    for item in actuales:
-        item["juega_hoy"] = item.get("equipo") in set(equipos_hoy)
-    return actuales
+    elegibles.sort(key=lambda x: (-x["prob_2"], -x["prob_1"], x["jugador"]))
+    return elegibles
 
 
 def sincronizar_todo():
@@ -370,9 +557,20 @@ def sincronizar_todo():
     tg_pts = base_pts.get("team_games", {})
     tg_3p = base_3p.get("team_games", {})
 
-    cambio_pts = False
-    cambio_3p = False
+    ahora = datetime.now(TZ_LOCAL)
 
+    # 1. Sincronización automática en la nube desde ESPN (sin PC ni stats.nba.com)
+    sincronizar_historial_espn(
+        hoy_local=ahora.date(),
+        games_pts=games_pts,
+        games_3p=games_3p,
+        hist_pts=hist_pts,
+        hist_3p=hist_3p,
+        tg_pts=tg_pts,
+        tg_3p=tg_3p,
+    )
+
+    # 2. Lectura en vivo vía nba_api.live
     try:
         sb = scoreboard.ScoreBoard()
         games = sb.get_dict().get("scoreboard", {}).get("games", [])
@@ -403,17 +601,13 @@ def sincronizar_todo():
             if gid and game_status in (2, 3):
                 try:
                     bs = boxscore.BoxScore(game_id=gid).get_dict().get("game", {})
-                    fecha_txt = datetime.now(TZ_LOCAL).strftime("%d/%m/%Y")
                     for side, tri in (("homeTeam", home), ("awayTeam", away)):
                         for p in bs.get(side, {}).get("players", []):
                             nombre = p.get("name", "")
-                            pid = p.get("personId")
                             st = p.get("statistics", {})
                             tpm = int(st.get("threePointersMade", 0) or 0)
                             tpa = int(st.get("threePointersAttempted", 0) or 0)
                             pts = int(st.get("points", 0) or 0)
-                            fgm = int(st.get("fieldGoalsMade", 0) or 0)
-                            fga = int(st.get("fieldGoalsAttempted", 0) or 0)
                             mins = str(st.get("minutesCalculated") or "")
 
                             if nombre:
@@ -425,27 +619,80 @@ def sincronizar_todo():
                                     "pts_live": pts,
                                     "min_live": mins,
                                 }
+                    time.sleep(0.2)
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"Aviso en vivo: {e}")
 
-                            if game_status == 3 and pid and mins not in ("", "PT00M00.00S"):
-                                p_key = str(pid)
-                                if gid not in games_pts:
-                                    e_pts = hist_pts.setdefault(
-                                        p_key,
-                                        {"jugador": nombre, "equipo": tri, "ultimo_partido": fecha_txt, "juegos": []},
-                                    )
-                                    e_pts["jugador"] = nombre
-                                    e_pts["equipo"] = tri
-                                    e_pts["ultimo_partido"] = fecha_mas_reciente(
-                                        e_pts.get("ultimo_partido", ""), fecha_txt
-                                    )
-                                    if not any(j.get("game_id") == gid for j in e_pts["juegos"]):
-                                        e_pts["juegos"].append({
-                                            "game_id": gid,
-                                            "fecha": fecha_txt,
-                                            "pts": pts,
-                                            "fgm": fgm,
-                                            "fga": fga,
-                                        })
-                                        cambio_pts = True
+    todos_finalizados = bool(partidos_estado) and all(
+        not p["es_live"] and "FINAL" in str(p["status_text"]).upper()
+        for p in partidos_estado
+    )
+    if (not partidos_hoy) or (todos_finalizados and ahora.hour < 17):
+        partidos_espn, equipos_espn, estado_espn, _ = obtener_partidos_fecha_espn(ahora.strftime("%Y%m%d"))
+        if partidos_espn:
+            partidos_hoy = partidos_espn
+            equipos_hoy = equipos_espn
+            partidos_estado = estado_espn
 
-                                if
+    eq_sorted = sorted(equipos_hoy)
+    live_payload = {
+        "actualizado_en": ahora.strftime("%d/%m/%Y %I:%M:%S %p"),
+        "equipos_hoy": eq_sorted,
+        "partidos_hoy": partidos_hoy,
+        "partidos": partidos_estado,
+        "jugadores_live": vivo_jugadores,
+    }
+    with open(LIVE_FILE, "w", encoding="utf-8") as f:
+        json.dump(live_payload, f, ensure_ascii=False)
+
+    # Corte real a partir de las fechas más recientes registradas en historial
+    fechas_reales = []
+    for info in hist_pts.values():
+        if info.get("ultimo_partido"):
+            fechas_reales.append(info["ultimo_partido"])
+    for info in hist_3p.values():
+        if info.get("ultimo_partido"):
+            fechas_reales.append(info["ultimo_partido"])
+    corte_real = ""
+    for f_txt in fechas_reales:
+        corte_real = fecha_mas_reciente(corte_real, f_txt)
+
+    base_pts["games_procesados"] = sorted(games_pts)
+    base_pts["team_games"] = tg_pts
+    base_pts["historial_jugadores"] = hist_pts
+    base_pts["equipos_hoy"] = eq_sorted
+    base_pts["partidos_hoy"] = partidos_hoy
+    base_pts["fecha_hoy"] = ahora.strftime("%d/%m/%Y")
+    base_pts["fecha_generacion"] = ahora.strftime("%Y-%m-%d")
+    base_pts["generado"] = ahora.strftime("%d/%m/%Y %I:%M %p")
+    if corte_real:
+        base_pts["corte"] = corte_real
+    base_pts["jugadores"] = recalcular_jugadores_puntos(base_pts, eq_sorted)
+    with open(PUNTOS_FILE, "w", encoding="utf-8") as f:
+        json.dump(base_pts, f, ensure_ascii=False)
+
+    base_3p["games_procesados"] = sorted(games_3p)
+    base_3p["team_games"] = tg_3p
+    base_3p["historial_triples"] = hist_3p
+    base_3p["equipos_hoy"] = eq_sorted
+    base_3p["partidos_hoy"] = partidos_hoy
+    base_3p["fecha_hoy"] = ahora.strftime("%d/%m/%Y")
+    base_3p["generado"] = ahora.strftime("%d/%m/%Y %I:%M %p")
+    if corte_real:
+        base_3p["corte"] = corte_real
+    base_3p["jugadores"] = recalcular_jugadores_triples(base_3p, eq_sorted)
+    with open(TRIPLES_FILE, "w", encoding="utf-8") as f:
+        json.dump(base_3p, f, ensure_ascii=False)
+
+    n_live = sum(1 for x in partidos_estado if x["es_live"])
+    print(
+        f"Live actualizado ({live_payload['actualizado_en']}) | Juegos en vivo: {n_live} | "
+        f"Partidos hoy: {len(partidos_hoy)} | Puntos elegibles: {len(base_pts.get('jugadores', []))} | "
+        f"Triples elegibles: {len(base_3p.get('jugadores', []))}"
+    )
+
+
+if __name__ == "__main__":
+    sincronizar_todo()
