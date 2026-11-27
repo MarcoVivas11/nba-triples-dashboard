@@ -15,6 +15,8 @@ MAX_ESPN_GAMES_PER_RUN = 18
 
 PUNTOS_FILE = "nba_puntos.json"
 TRIPLES_FILE = "nba_triples.json"
+ASISTENCIAS_FILE = "nba_asistencias.json"
+REBOTES_FILE = "nba_rebotes.json"
 LIVE_FILE = "nba_live.json"
 
 HEADERS_ESPN = {
@@ -192,29 +194,43 @@ def procesar_evento_espn(
     fecha_txt,
     games_pts,
     games_3p,
+    games_ast,
+    games_reb,
     hist_pts,
     hist_3p,
+    hist_ast,
+    hist_reb,
     tg_pts,
     tg_3p,
+    tg_ast,
+    tg_reb,
     solo_fotos=False,
 ):
     gid = f"ESPN_{ev_id}"
-    if not solo_fotos and gid in games_pts and gid in games_3p:
-        return False, False
+    todos_listos = (
+        gid in games_pts
+        and gid in games_3p
+        and gid in games_ast
+        and gid in games_reb
+    )
+    if not solo_fotos and todos_listos:
+        return False, False, False, False
 
     url = f"https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={ev_id}"
     resp = requests.get(url, headers=HEADERS_ESPN, timeout=15)
     if resp.status_code != 200:
-        return False, False
+        return False, False, False, False
 
     data = resp.json()
     box = data.get("boxscore") or {}
     players_groups = box.get("players") or []
     if not players_groups:
-        return False, False
+        return False, False, False, False
 
     cambio_pts = False
     cambio_3p = False
+    cambio_ast = False
+    cambio_reb = False
 
     for grp in players_groups:
         team_info = grp.get("team") or {}
@@ -238,10 +254,9 @@ def procesar_evento_espn(
         i_min = idx_col("MIN", 0)
         i_fg = idx_col("FG", 1)
         i_3pt = idx_col("3PT", 2)
-        i_pts = -1
-        for candidate in ("PTS",):
-            if candidate in labels:
-                i_pts = labels.index(candidate)
+        i_reb = labels.index("REB") if "REB" in labels else -1
+        i_ast = labels.index("AST") if "AST" in labels else -1
+        i_pts = labels.index("PTS") if "PTS" in labels else -1
 
         for ath_entry in athletes:
             if ath_entry.get("didNotPlay"):
@@ -261,12 +276,22 @@ def procesar_evento_espn(
             p_key = str(pid)
 
             if headshot_url:
-                if p_key in hist_pts and hist_pts[p_key].get("foto") != headshot_url:
-                    hist_pts[p_key]["foto"] = headshot_url
-                    cambio_pts = True
-                if p_key in hist_3p and hist_3p[p_key].get("foto") != headshot_url:
-                    hist_3p[p_key]["foto"] = headshot_url
-                    cambio_3p = True
+                for store, flag_name in (
+                    (hist_pts, "pts"),
+                    (hist_3p, "3p"),
+                    (hist_ast, "ast"),
+                    (hist_reb, "reb"),
+                ):
+                    if p_key in store and store[p_key].get("foto") != headshot_url:
+                        store[p_key]["foto"] = headshot_url
+                        if flag_name == "pts":
+                            cambio_pts = True
+                        elif flag_name == "3p":
+                            cambio_3p = True
+                        elif flag_name == "ast":
+                            cambio_ast = True
+                        elif flag_name == "reb":
+                            cambio_reb = True
 
             if solo_fotos:
                 continue
@@ -277,10 +302,14 @@ def procesar_evento_espn(
 
             fg_str = stats_arr[i_fg] if i_fg < len(stats_arr) else "0-0"
             t3_str = stats_arr[i_3pt] if i_3pt < len(stats_arr) else "0-0"
+            reb_str = stats_arr[i_reb] if (0 <= i_reb < len(stats_arr)) else "0"
+            ast_str = stats_arr[i_ast] if (0 <= i_ast < len(stats_arr)) else "0"
             pts_str = stats_arr[i_pts] if (0 <= i_pts < len(stats_arr)) else "0"
 
             fgm, fga = parsear_hecho_o_intentado(fg_str)
             tpm, tpa = parsear_hecho_o_intentado(t3_str)
+            reb, _ = parsear_hecho_o_intentado(reb_str)
+            ast, _ = parsear_hecho_o_intentado(ast_str)
             pts, _ = parsear_hecho_o_intentado(pts_str)
 
             if gid not in games_pts:
@@ -322,6 +351,42 @@ def procesar_evento_espn(
                     })
                     cambio_3p = True
 
+            if gid not in games_ast:
+                e_ast = hist_ast.setdefault(
+                    p_key,
+                    {"jugador": nombre, "equipo": tri, "foto": headshot_url, "ultimo_partido": fecha_txt, "juegos": []},
+                )
+                e_ast["jugador"] = nombre
+                e_ast["equipo"] = tri
+                if headshot_url:
+                    e_ast["foto"] = headshot_url
+                e_ast["ultimo_partido"] = fecha_mas_reciente(e_ast.get("ultimo_partido", ""), fecha_txt)
+                if not any(j.get("game_id") == gid for j in e_ast["juegos"]):
+                    e_ast["juegos"].append({
+                        "game_id": gid,
+                        "fecha": fecha_txt,
+                        "ast": ast,
+                    })
+                    cambio_ast = True
+
+            if gid not in games_reb:
+                e_reb = hist_reb.setdefault(
+                    p_key,
+                    {"jugador": nombre, "equipo": tri, "foto": headshot_url, "ultimo_partido": fecha_txt, "juegos": []},
+                )
+                e_reb["jugador"] = nombre
+                e_reb["equipo"] = tri
+                if headshot_url:
+                    e_reb["foto"] = headshot_url
+                e_reb["ultimo_partido"] = fecha_mas_reciente(e_reb.get("ultimo_partido", ""), fecha_txt)
+                if not any(j.get("game_id") == gid for j in e_reb["juegos"]):
+                    e_reb["juegos"].append({
+                        "game_id": gid,
+                        "fecha": fecha_txt,
+                        "reb": reb,
+                    })
+                    cambio_reb = True
+
     if not solo_fotos:
         if gid not in games_pts:
             for t in (away, home):
@@ -337,22 +402,45 @@ def procesar_evento_espn(
             games_3p.add(gid)
             cambio_3p = True
 
-    return cambio_pts, cambio_3p
+        if gid not in games_ast:
+            for t in (away, home):
+                if t:
+                    tg_ast[t] = int(tg_ast.get(t, 0) or 0) + 1
+            games_ast.add(gid)
+            cambio_ast = True
+
+        if gid not in games_reb:
+            for t in (away, home):
+                if t:
+                    tg_reb[t] = int(tg_reb.get(t, 0) or 0) + 1
+            games_reb.add(gid)
+            cambio_reb = True
+
+    return cambio_pts, cambio_3p, cambio_ast, cambio_reb
 
 
 def sincronizar_historial_espn(
     hoy_local,
     games_pts,
     games_3p,
+    games_ast,
+    games_reb,
     hist_pts,
     hist_3p,
+    hist_ast,
+    hist_reb,
     tg_pts,
     tg_3p,
+    tg_ast,
+    tg_reb,
 ):
-    cambio_pts_total = False
-    cambio_3p_total = False
     procesados = 0
-    faltan_fotos = any(not v.get("foto") for v in hist_3p.values()) or any(not v.get("foto") for v in hist_pts.values())
+    faltan_fotos = (
+        any(not v.get("foto") for v in hist_3p.values())
+        or any(not v.get("foto") for v in hist_pts.values())
+        or any(not v.get("foto") for v in hist_ast.values())
+        or any(not v.get("foto") for v in hist_reb.values())
+    )
 
     cursor = hoy_local
     while cursor >= SEASON_START_DATE and procesados < MAX_ESPN_GAMES_PER_RUN:
@@ -367,35 +455,40 @@ def sincronizar_historial_espn(
             if not ev_id:
                 continue
             gid = f"ESPN_{ev_id}"
-            ya_procesado = gid in games_pts and gid in games_3p
+            ya_procesado = (
+                gid in games_pts
+                and gid in games_3p
+                and gid in games_ast
+                and gid in games_reb
+            )
             if ya_procesado and not faltan_fotos:
                 continue
             try:
-                c_p, c_3 = procesar_evento_espn(
+                procesar_evento_espn(
                     ev_id=ev_id,
                     away=ev["away"],
                     home=ev["home"],
                     fecha_txt=fecha_txt,
                     games_pts=games_pts,
                     games_3p=games_3p,
+                    games_ast=games_ast,
+                    games_reb=games_reb,
                     hist_pts=hist_pts,
                     hist_3p=hist_3p,
+                    hist_ast=hist_ast,
+                    hist_reb=hist_reb,
                     tg_pts=tg_pts,
                     tg_3p=tg_3p,
+                    tg_ast=tg_ast,
+                    tg_reb=tg_reb,
                     solo_fotos=ya_procesado and faltan_fotos,
                 )
-                if c_p:
-                    cambio_pts_total = True
-                if c_3:
-                    cambio_3p_total = True
                 procesados += 1
                 time.sleep(0.2)
             except Exception as e:
                 print(f"Aviso evento ESPN {ev_id}: {e}")
 
         cursor -= timedelta(days=1)
-
-    return cambio_pts_total, cambio_3p_total
 
 
 def recalcular_jugadores_puntos(base, equipos_hoy):
@@ -541,6 +634,142 @@ def recalcular_jugadores_triples(triples_base, equipos_hoy):
     return elegibles
 
 
+def recalcular_jugadores_asistencias(ast_base, equipos_hoy):
+    team_games = ast_base.get("team_games", {})
+    historial = ast_base.get("historial_asistencias", {})
+    elegibles = []
+
+    for pid_str, info in historial.items():
+        pid = int(pid_str)
+        eq = normalizar_equipo(info.get("equipo", ""))
+        juegos = info.get("juegos", [])
+        if not eq or not juegos:
+            continue
+
+        pj = len(juegos)
+        tpj = int(team_games.get(eq, pj))
+        if tpj <= 0 or pj <= 0:
+            continue
+
+        pct_pj = round((pj / tpj) * 100.0, 1)
+        if pct_pj <= 80.0:
+            continue
+
+        ast_list = [int(x.get("ast", 0)) for x in juegos]
+        apg = round(sum(ast_list) / pj, 1)
+        if apg < 5.0:
+            continue
+
+        p5 = round((sum(1 for x in ast_list if x >= 5) / pj) * 100.0, 1)
+        p6 = round((sum(1 for x in ast_list if x >= 6) / pj) * 100.0, 1)
+        p7 = round((sum(1 for x in ast_list if x >= 7) / pj) * 100.0, 1)
+
+        max_a = max(ast_list)
+        max_freq_key = max(5, max_a)
+        freq = {str(k): sum(1 for x in ast_list if x == k) for k in range(5, max_freq_key + 1)}
+
+        fechas_j = [x.get("fecha", "") for x in juegos if x.get("fecha")]
+        ult_pj = info.get("ultimo_partido", "")
+        for f_c in fechas_j:
+            ult_pj = fecha_mas_reciente(ult_pj, f_c)
+
+        cp, cs, en = TEAM_COLORS.get(eq, ("#38bdf8", "#94a3b8", eq))
+        foto_url = info.get("foto") or f"https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png"
+
+        elegibles.append({
+            "player_id": pid,
+            "foto": foto_url,
+            "equipo": eq,
+            "equipo_nombre": en,
+            "juega_hoy": eq in set(equipos_hoy),
+            "color_prim": cp,
+            "color_sec": cs,
+            "jugador": info.get("jugador", ""),
+            "ultimo_partido": ult_pj,
+            "pj": pj,
+            "team_pj": tpj,
+            "pj_str": f"{pj}/{tpj}",
+            "pct_pj": pct_pj,
+            "apg": apg,
+            "prob_5": p5,
+            "prob_6": p6,
+            "prob_7": p7,
+            "max_ast": max_a,
+            "freq": freq,
+        })
+
+    elegibles.sort(key=lambda x: (-x["prob_6"], -x["prob_5"], -x["apg"], x["jugador"]))
+    return elegibles
+
+
+def recalcular_jugadores_rebotes(reb_base, equipos_hoy):
+    team_games = reb_base.get("team_games", {})
+    historial = reb_base.get("historial_rebotes", {})
+    elegibles = []
+
+    for pid_str, info in historial.items():
+        pid = int(pid_str)
+        eq = normalizar_equipo(info.get("equipo", ""))
+        juegos = info.get("juegos", [])
+        if not eq or not juegos:
+            continue
+
+        pj = len(juegos)
+        tpj = int(team_games.get(eq, pj))
+        if tpj <= 0 or pj <= 0:
+            continue
+
+        pct_pj = round((pj / tpj) * 100.0, 1)
+        if pct_pj < 80.0:
+            continue
+
+        reb_list = [int(x.get("reb", 0)) for x in juegos]
+        rpg = round(sum(reb_list) / pj, 1)
+        if rpg < 7.0:
+            continue
+
+        p7 = round((sum(1 for x in reb_list if x >= 7) / pj) * 100.0, 1)
+        p8 = round((sum(1 for x in reb_list if x >= 8) / pj) * 100.0, 1)
+        p9 = round((sum(1 for x in reb_list if x >= 9) / pj) * 100.0, 1)
+
+        max_r = max(reb_list)
+        max_freq_key = max(7, max_r)
+        freq = {str(k): sum(1 for x in reb_list if x == k) for k in range(7, max_freq_key + 1)}
+
+        fechas_j = [x.get("fecha", "") for x in juegos if x.get("fecha")]
+        ult_pj = info.get("ultimo_partido", "")
+        for f_c in fechas_j:
+            ult_pj = fecha_mas_reciente(ult_pj, f_c)
+
+        cp, cs, en = TEAM_COLORS.get(eq, ("#38bdf8", "#94a3b8", eq))
+        foto_url = info.get("foto") or f"https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png"
+
+        elegibles.append({
+            "player_id": pid,
+            "foto": foto_url,
+            "equipo": eq,
+            "equipo_nombre": en,
+            "juega_hoy": eq in set(equipos_hoy),
+            "color_prim": cp,
+            "color_sec": cs,
+            "jugador": info.get("jugador", ""),
+            "ultimo_partido": ult_pj,
+            "pj": pj,
+            "team_pj": tpj,
+            "pj_str": f"{pj}/{tpj}",
+            "pct_pj": pct_pj,
+            "rpg": rpg,
+            "prob_7": p7,
+            "prob_8": p8,
+            "prob_9": p9,
+            "max_reb": max_r,
+            "freq": freq,
+        })
+
+    elegibles.sort(key=lambda x: (-x["prob_8"], -x["prob_7"], -x["rpg"], x["jugador"]))
+    return elegibles
+
+
 def sincronizar_todo():
     vivo_jugadores = {}
     partidos_estado = []
@@ -572,13 +801,45 @@ def sincronizar_todo():
         "historial_triples": {},
         "jugadores": [],
     })
+    base_ast = cargar_json_seguro(ASISTENCIAS_FILE, {
+        "season": SEASON,
+        "corte": "",
+        "fecha_hoy": "",
+        "generado": "",
+        "equipos_hoy": [],
+        "partidos_hoy": [],
+        "games_procesados": [],
+        "team_games": {},
+        "historial_asistencias": {},
+        "jugadores": [],
+    })
+    base_reb = cargar_json_seguro(REBOTES_FILE, {
+        "season": SEASON,
+        "corte": "",
+        "fecha_hoy": "",
+        "generado": "",
+        "equipos_hoy": [],
+        "partidos_hoy": [],
+        "games_procesados": [],
+        "team_games": {},
+        "historial_rebotes": {},
+        "jugadores": [],
+    })
 
     games_pts = set(base_pts.get("games_procesados", []))
     games_3p = set(base_3p.get("games_procesados", []))
+    games_ast = set(base_ast.get("games_procesados", []))
+    games_reb = set(base_reb.get("games_procesados", []))
+
     hist_pts = base_pts.get("historial_jugadores", {})
     hist_3p = base_3p.get("historial_triples", {})
+    hist_ast = base_ast.get("historial_asistencias", {})
+    hist_reb = base_reb.get("historial_rebotes", {})
+
     tg_pts = base_pts.get("team_games", {})
     tg_3p = base_3p.get("team_games", {})
+    tg_ast = base_ast.get("team_games", {})
+    tg_reb = base_reb.get("team_games", {})
 
     ahora = datetime.now(TZ_LOCAL)
 
@@ -586,10 +847,16 @@ def sincronizar_todo():
         hoy_local=ahora.date(),
         games_pts=games_pts,
         games_3p=games_3p,
+        games_ast=games_ast,
+        games_reb=games_reb,
         hist_pts=hist_pts,
         hist_3p=hist_3p,
+        hist_ast=hist_ast,
+        hist_reb=hist_reb,
         tg_pts=tg_pts,
         tg_3p=tg_3p,
+        tg_ast=tg_ast,
+        tg_reb=tg_reb,
     )
 
     try:
@@ -629,6 +896,8 @@ def sincronizar_todo():
                             tpm = int(st.get("threePointersMade", 0) or 0)
                             tpa = int(st.get("threePointersAttempted", 0) or 0)
                             pts = int(st.get("points", 0) or 0)
+                            ast = int(st.get("assists", 0) or 0)
+                            reb = int(st.get("reboundsTotal", 0) or 0)
                             mins = str(st.get("minutesCalculated") or "")
 
                             if nombre:
@@ -638,6 +907,8 @@ def sincronizar_todo():
                                     "3pm_live": tpm,
                                     "3pa_live": tpa,
                                     "pts_live": pts,
+                                    "ast_live": ast,
+                                    "reb_live": reb,
                                     "min_live": mins,
                                 }
                     time.sleep(0.2)
@@ -669,12 +940,10 @@ def sincronizar_todo():
         json.dump(live_payload, f, ensure_ascii=False)
 
     fechas_reales = []
-    for info in hist_pts.values():
-        if info.get("ultimo_partido"):
-            fechas_reales.append(info["ultimo_partido"])
-    for info in hist_3p.values():
-        if info.get("ultimo_partido"):
-            fechas_reales.append(info["ultimo_partido"])
+    for store in (hist_pts, hist_3p, hist_ast, hist_reb):
+        for info in store.values():
+            if info.get("ultimo_partido"):
+                fechas_reales.append(info["ultimo_partido"])
     corte_real = ""
     for f_txt in fechas_reales:
         corte_real = fecha_mas_reciente(corte_real, f_txt)
@@ -706,11 +975,38 @@ def sincronizar_todo():
     with open(TRIPLES_FILE, "w", encoding="utf-8") as f:
         json.dump(base_3p, f, ensure_ascii=False)
 
+    base_ast["games_procesados"] = sorted(games_ast)
+    base_ast["team_games"] = tg_ast
+    base_ast["historial_asistencias"] = hist_ast
+    base_ast["equipos_hoy"] = eq_sorted
+    base_ast["partidos_hoy"] = partidos_hoy
+    base_ast["fecha_hoy"] = ahora.strftime("%d/%m/%Y")
+    base_ast["generado"] = ahora.strftime("%d/%m/%Y %I:%M %p")
+    if corte_real:
+        base_ast["corte"] = corte_real
+    base_ast["jugadores"] = recalcular_jugadores_asistencias(base_ast, eq_sorted)
+    with open(ASISTENCIAS_FILE, "w", encoding="utf-8") as f:
+        json.dump(base_ast, f, ensure_ascii=False)
+
+    base_reb["games_procesados"] = sorted(games_reb)
+    base_reb["team_games"] = tg_reb
+    base_reb["historial_rebotes"] = hist_reb
+    base_reb["equipos_hoy"] = eq_sorted
+    base_reb["partidos_hoy"] = partidos_hoy
+    base_reb["fecha_hoy"] = ahora.strftime("%d/%m/%Y")
+    base_reb["generado"] = ahora.strftime("%d/%m/%Y %I:%M %p")
+    if corte_real:
+        base_reb["corte"] = corte_real
+    base_reb["jugadores"] = recalcular_jugadores_rebotes(base_reb, eq_sorted)
+    with open(REBOTES_FILE, "w", encoding="utf-8") as f:
+        json.dump(base_reb, f, ensure_ascii=False)
+
     n_live = sum(1 for x in partidos_estado if x["es_live"])
     print(
         f"Live actualizado ({live_payload['actualizado_en']}) | Juegos en vivo: {n_live} | "
-        f"Partidos hoy: {len(partidos_hoy)} | Puntos elegibles: {len(base_pts.get('jugadores', []))} | "
-        f"Triples elegibles: {len(base_3p.get('jugadores', []))}"
+        f"Partidos hoy: {len(partidos_hoy)} | Puntos: {len(base_pts.get('jugadores', []))} | "
+        f"Triples: {len(base_3p.get('jugadores', []))} | Asistencias: {len(base_ast.get('jugadores', []))} | "
+        f"Rebotes: {len(base_reb.get('jugadores', []))}"
     )
 
 
