@@ -196,9 +196,10 @@ def procesar_evento_espn(
     hist_3p,
     tg_pts,
     tg_3p,
+    solo_fotos=False,
 ):
     gid = f"ESPN_{ev_id}"
-    if gid in games_pts and gid in games_3p:
+    if not solo_fotos and gid in games_pts and gid in games_3p:
         return False, False
 
     url = f"https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={ev_id}"
@@ -253,6 +254,23 @@ def procesar_evento_espn(
             if not pid_raw or not nombre or not stats_arr:
                 continue
 
+            try:
+                pid = int(pid_raw)
+            except Exception:
+                continue
+            p_key = str(pid)
+
+            if headshot_url:
+                if p_key in hist_pts and hist_pts[p_key].get("foto") != headshot_url:
+                    hist_pts[p_key]["foto"] = headshot_url
+                    cambio_pts = True
+                if p_key in hist_3p and hist_3p[p_key].get("foto") != headshot_url:
+                    hist_3p[p_key]["foto"] = headshot_url
+                    cambio_3p = True
+
+            if solo_fotos:
+                continue
+
             min_val = stats_arr[i_min] if i_min < len(stats_arr) else ""
             if minutos_jugados_espn(min_val) <= 0.0:
                 continue
@@ -264,12 +282,6 @@ def procesar_evento_espn(
             fgm, fga = parsear_hecho_o_intentado(fg_str)
             tpm, tpa = parsear_hecho_o_intentado(t3_str)
             pts, _ = parsear_hecho_o_intentado(pts_str)
-
-            try:
-                pid = int(pid_raw)
-            except Exception:
-                continue
-            p_key = str(pid)
 
             if gid not in games_pts:
                 e_pts = hist_pts.setdefault(
@@ -310,19 +322,20 @@ def procesar_evento_espn(
                     })
                     cambio_3p = True
 
-    if gid not in games_pts:
-        for t in (away, home):
-            if t:
-                tg_pts[t] = int(tg_pts.get(t, 0) or 0) + 1
-        games_pts.add(gid)
-        cambio_pts = True
+    if not solo_fotos:
+        if gid not in games_pts:
+            for t in (away, home):
+                if t:
+                    tg_pts[t] = int(tg_pts.get(t, 0) or 0) + 1
+            games_pts.add(gid)
+            cambio_pts = True
 
-    if gid not in games_3p:
-        for t in (away, home):
-            if t:
-                tg_3p[t] = int(tg_3p.get(t, 0) or 0) + 1
-        games_3p.add(gid)
-        cambio_3p = True
+        if gid not in games_3p:
+            for t in (away, home):
+                if t:
+                    tg_3p[t] = int(tg_3p.get(t, 0) or 0) + 1
+            games_3p.add(gid)
+            cambio_3p = True
 
     return cambio_pts, cambio_3p
 
@@ -339,6 +352,7 @@ def sincronizar_historial_espn(
     cambio_pts_total = False
     cambio_3p_total = False
     procesados = 0
+    faltan_fotos = any(not v.get("foto") for v in hist_3p.values()) or any(not v.get("foto") for v in hist_pts.values())
 
     cursor = hoy_local
     while cursor >= SEASON_START_DATE and procesados < MAX_ESPN_GAMES_PER_RUN:
@@ -353,7 +367,8 @@ def sincronizar_historial_espn(
             if not ev_id:
                 continue
             gid = f"ESPN_{ev_id}"
-            if gid in games_pts and gid in games_3p:
+            ya_procesado = gid in games_pts and gid in games_3p
+            if ya_procesado and not faltan_fotos:
                 continue
             try:
                 c_p, c_3 = procesar_evento_espn(
@@ -367,6 +382,7 @@ def sincronizar_historial_espn(
                     hist_3p=hist_3p,
                     tg_pts=tg_pts,
                     tg_3p=tg_3p,
+                    solo_fotos=ya_procesado and faltan_fotos,
                 )
                 if c_p:
                     cambio_pts_total = True
