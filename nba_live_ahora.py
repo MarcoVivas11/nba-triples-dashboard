@@ -248,6 +248,7 @@ def procesar_evento_espn(
             ath = ath_entry.get("athlete") or {}
             pid_raw = ath.get("id")
             nombre = str(ath.get("displayName") or "").strip()
+            headshot_url = str(((ath.get("headshot") or {}).get("href")) or "").strip()
             stats_arr = ath_entry.get("stats") or []
             if not pid_raw or not nombre or not stats_arr:
                 continue
@@ -273,10 +274,12 @@ def procesar_evento_espn(
             if gid not in games_pts:
                 e_pts = hist_pts.setdefault(
                     p_key,
-                    {"jugador": nombre, "equipo": tri, "ultimo_partido": fecha_txt, "juegos": []},
+                    {"jugador": nombre, "equipo": tri, "foto": headshot_url, "ultimo_partido": fecha_txt, "juegos": []},
                 )
                 e_pts["jugador"] = nombre
                 e_pts["equipo"] = tri
+                if headshot_url:
+                    e_pts["foto"] = headshot_url
                 e_pts["ultimo_partido"] = fecha_mas_reciente(e_pts.get("ultimo_partido", ""), fecha_txt)
                 if not any(j.get("game_id") == gid for j in e_pts["juegos"]):
                     e_pts["juegos"].append({
@@ -291,10 +294,12 @@ def procesar_evento_espn(
             if gid not in games_3p:
                 e_3p = hist_3p.setdefault(
                     p_key,
-                    {"jugador": nombre, "equipo": tri, "ultimo_partido": fecha_txt, "juegos": []},
+                    {"jugador": nombre, "equipo": tri, "foto": headshot_url, "ultimo_partido": fecha_txt, "juegos": []},
                 )
                 e_3p["jugador"] = nombre
                 e_3p["equipo"] = tri
+                if headshot_url:
+                    e_3p["foto"] = headshot_url
                 e_3p["ultimo_partido"] = fecha_mas_reciente(e_3p.get("ultimo_partido", ""), fecha_txt)
                 if not any(j.get("game_id") == gid for j in e_3p["juegos"]):
                     e_3p["juegos"].append({
@@ -421,10 +426,11 @@ def recalcular_jugadores_puntos(base, equipos_hoy):
         c_medio = sum(1 for p in pts_list if 15 <= p <= 24)
         c_alto = sum(1 for p in pts_list if p >= 25)
         cp, cs, en = TEAM_COLORS.get(eq, ("#38bdf8", "#94a3b8", eq))
+        foto_url = info.get("foto") or f"https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png"
 
         elegibles.append({
             "player_id": pid,
-            "foto": f"https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png",
+            "foto": foto_url,
             "jugador": info.get("jugador", ""),
             "equipo": eq,
             "equipo_nombre": en,
@@ -492,9 +498,10 @@ def recalcular_jugadores_triples(triples_base, equipos_hoy):
         max_t = max(tpm_list)
         freq = {str(k): sum(1 for x in tpm_list if x == k) for k in range(max_t + 1)}
         cp, cs, en = TEAM_COLORS.get(eq, ("#38bdf8", "#94a3b8", eq))
+        foto_url = info.get("foto") or f"https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png"
 
         elegibles.append({
-            "foto": f"https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png",
+            "foto": foto_url,
             "equipo": eq,
             "equipo_nombre": en,
             "juega_hoy": eq in set(equipos_hoy),
@@ -559,7 +566,6 @@ def sincronizar_todo():
 
     ahora = datetime.now(TZ_LOCAL)
 
-    # 1. Sincronización automática en la nube desde ESPN (sin PC ni stats.nba.com)
     sincronizar_historial_espn(
         hoy_local=ahora.date(),
         games_pts=games_pts,
@@ -570,7 +576,6 @@ def sincronizar_todo():
         tg_3p=tg_3p,
     )
 
-    # 2. Lectura en vivo vía nba_api.live
     try:
         sb = scoreboard.ScoreBoard()
         games = sb.get_dict().get("scoreboard", {}).get("games", [])
@@ -647,7 +652,6 @@ def sincronizar_todo():
     with open(LIVE_FILE, "w", encoding="utf-8") as f:
         json.dump(live_payload, f, ensure_ascii=False)
 
-    # Corte real a partir de las fechas más recientes registradas en historial
     fechas_reales = []
     for info in hist_pts.values():
         if info.get("ultimo_partido"):
