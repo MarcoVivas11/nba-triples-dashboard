@@ -30,11 +30,13 @@ jobs:
       - name: Guardar cambios en el repositorio
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add nba_live.json
           if [ -f nba_puntos.json ]; then git add nba_puntos.json; fi
           if [ -f nba_triples.json ]; then git add nba_triples.json; fi
-          if git diff --cached --quiet; then
+          if [ -f nba_asistencias.json ]; then git add nba_asistencias.json; fi
+          if [ -f nba_rebotes.json ]; then git add nba_rebotes.json; fi
+          if git diff --staged --quiet; then
             echo "Sin cambios en los JSON para commitear."
             exit 0
           fi
